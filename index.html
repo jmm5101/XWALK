@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>XWALK — Red & Green Man</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    color: #eee;
+    font-family: 'Press Start 2P', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    image-rendering: pixelated;
+  }
+  h1 {
+    font-size: 18px;
+    margin-bottom: 8px;
+    color: #ffcc00;
+    text-shadow: 2px 2px 0 #000;
+  }
+  #game-wrap {
+    position: relative;
+    border: 4px solid #444;
+    box-shadow: 0 0 20px #000;
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #111;
+    cursor: none;
+  }
+  #ui {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .btn {
+    display: inline-block;
+    padding: 10px 16px;
+    margin: 6px;
+    background: #222;
+    border: 3px solid #666;
+    color: #fff;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    image-rendering: pixelated;
+  }
+  .btn:hover, .btn:focus { border-color: #ffcc00; color: #ffcc00; }
+  .btn.red { border-color: #c00; color: #f66; }
+  .btn.green { border-color: #0a0; color: #6f6; }
+  #timer { color: #ffcc00; }
+  #msg { min-height: 24px; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1>XWALK</h1>
+  <div id="game-wrap">
+    <canvas id="c" width="320" height="240"></canvas>
+  </div>
+  <div id="ui">
+    <div id="msg">Choose your man</div>
+    <div id="menu">
+      <button class="btn red" id="btn-red">RED MAN</button>
+      <button class="btn green" id="btn-green">GREEN MAN</button>
+    </div>
+    <div id="hud" style="display:none">
+      TIME <span id="timer">60</span>s &nbsp;|&nbsp; ARROWS / WASD to hop
+    </div>
+  </div>
+
+<script>
+// ============================================================
+// XWALK — Pixel Ampelmännchen Piano-Key Crosswalk
+// SAM Coupé inspired limited palette + chunky pixels
+// ============================================================
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// Scale for crisp pixels (internal 160×120 logical, displayed 320×240)
+const SCALE = 2;
+const W = 160, H = 120;
+
+// SAM-ish 16-color inspired palette
+const PAL = {
+  black: '#000000',
+  dark:  '#1a1a2e',
+  gray:  '#555555',
+  light: '#aaaaaa',
+  white: '#eeeeee',
+  red:   '#cc0000',
+  green: '#00aa00',
+  yellow:'#ffcc00',
+  blue:  '#2244aa',
+  cyan:  '#44aaaa',
+  orange:'#cc6600',
+  pink:  '#cc4488',
+  road:  '#222222',
+  curb:  '#666666',
+  keyW:  '#e8e0c8',  // piano white
+  keyB:  '#1a1a1a',  // piano black
+};
+
+// Game state
+let state = 'menu'; // menu | play | dead | win
+let manColor = 'green'; // 'red' | 'green'
+let timer = 60;
+let stillTimer = 0; // for red man standing-still timeout
+let lastMove = 0;
+let frame = 0;
+let cars = [];
+let keys = []; // piano key platforms
+let player = { x: 80, y: 108, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
+
+// Piano-key layout: several rows of white keys across the road
+// Road occupies roughly y = 20 to 100
+function buildKeys() {
+  keys = [];
+  // Bottom sidewalk safe zone is y>100, top y<18
+  // Create 5 rows of alternating-offset white keys
+  const rows = [
+    { y: 88, count: 6, offset: 8 },
+    { y: 72, count: 5, offset: 20 },
+    { y: 56, count: 6, offset: 4 },
+    { y: 40, count: 5, offset: 16 },
+    { y: 24, count: 6, offset: 10 },
+  ];
+  rows.forEach((r, ri) => {
+    const gap = 160 / r.count;
+    for (let i = 0; i < r.count; i++) {
+      const kw = 18 + (i % 2);
+      keys.push({
+        x: r.offset + i * gap,
+        y: r.y,
+        w: kw,
+        h: 10,
+        row: ri
+      });
+    }
+  });
+}
+
+function spawnCar() {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const laneYs = [30, 46, 62, 78];
+  const y = laneYs[Math.floor(Math.random() * laneYs.length)];
+  cars.push({
+    x: dir > 0 ? -30 : 190,
+    y: y,
+    w: 22,
+    h: 10,
+    vx: dir * (1.2 + Math.random() * 1.4),
+    color: Math.random() < 0.3 ? PAL.red : (Math.random() < 0.5 ? PAL.blue : PAL.orange)
+  });
+}
+
+function resetGame(color) {
+  manColor = color;
+  state = 'play';
+  timer = 60;
+  stillTimer = 0;
+  lastMove = performance.now();
+  frame = 0;
+  cars = [];
+  player = { x: 80, y: 108, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
+  buildKeys();
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  document.getElementById('msg').textContent = '';
+}
+
+// Input
+const keysDown = {};
+window.addEventListener('keydown', e => {
+  keysDown[e.code] = true;
+  if (state === 'play' && player.hopCooldown <= 0) {
+    let hopped = false;
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') { player.vy = -3.2; hopped = true; }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') { player.vy = 2.4; hopped = true; }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') { player.vx = -2.6; hopped = true; }
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') { player.vx = 2.6; hopped = true; }
+    if (hopped) {
+      player.hopCooldown = 12;
+      player.onGround = false;
+      lastMove = performance.now();
+      stillTimer = 0;
+    }
+  }
+  if ((state === 'dead' || state === 'win') && (e.code === 'Space' || e.code === 'Enter')) {
+    state = 'menu';
+    document.getElementById('menu').style.display = 'block';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('msg').textContent = 'Choose your man';
+  }
+});
+window.addEventListener('keyup', e => { keysDown[e.code] = false; });
+
+document.getElementById('btn-red').onclick = () => resetGame('red');
+document.getElementById('btn-green').onclick = () => resetGame('green');
+
+// Physics & collision helpers
+function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function isOnKey(px, py) {
+  // player is roughly 8x10
+  const p = { x: px - 4, y: py - 8, w: 8, h: 10 };
+  for (const k of keys) {
+    if (rectsOverlap(p, k)) return true;
+  }
+  // sidewalks
+  if (py >= 104 || py <= 16) return true;
+  return false;
+}
+
+function update(dt) {
+  if (state !== 'play') return;
+  frame++;
+
+  // Timer
+  timer -= dt;
+  if (timer <= 0) {
+    timer = 0;
+    state = 'dead';
+    document.getElementById('msg').textContent = 'TIME UP — RUN OVER!';
+    return;
+  }
+
+  // Red man standing-still timeout
+  if (manColor === 'red') {
+    stillTimer = (performance.now() - lastMove) / 1000;
+    if (stillTimer >= 60) {
+      state = 'dead';
+      document.getElementById('msg').textContent = 'RED MAN TIMED OUT (stood still 60s)';
+      return;
+    }
+  }
+
+  // Hop physics (simple arcade)
+  if (player.hopCooldown > 0) player.hopCooldown--;
+
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // Friction / settle
+  player.vx *= 0.82;
+  player.vy *= 0.82;
+  if (Math.abs(player.vx) < 0.15) player.vx = 0;
+  if (Math.abs(player.vy) < 0.15) player.vy = 0;
+
+  // Clamp
+  player.x = Math.max(6, Math.min(154, player.x));
+  player.y = Math.max(8, Math.min(112, player.y));
+
+  // Landing check
+  if (Math.abs(player.vx) < 0.2 && Math.abs(player.vy) < 0.2) {
+    player.onGround = true;
+    // Did we land on blacktop?
+    if (!isOnKey(player.x, player.y)) {
+      state = 'dead';
+      document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
+      return;
+    }
+  }
+
+  // Cars
+  if (frame % 45 === 0) spawnCar();
+  for (let i = cars.length - 1; i >= 0; i--) {
+    const c = cars[i];
+    c.x += c.vx;
+    if (c.x < -40 || c.x > 200) { cars.splice(i, 1); continue; }
+
+    // Collision with player
+    const pbox = { x: player.x - 4, y: player.y - 8, w: 8, h: 10 };
+    if (rectsOverlap(pbox, c)) {
+      state = 'dead';
+      document.getElementById('msg').textContent = 'HIT BY CAR — RUN OVER!';
+      return;
+    }
+  }
+
+  // Win condition: reach top sidewalk
+  if (player.y <= 16) {
+    state = 'win';
+    document.getElementById('msg').textContent = 'YOU CROSSED!  WELL DONE';
+  }
+
+  document.getElementById('timer').textContent = Math.ceil(timer);
+}
+
+// Drawing helpers — chunky pixel style
+function drawRect(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
+}
+
+function drawMan(x, y, color, walking) {
+  // Simple 8×10 Ampelmännchen-style pixel figure
+  const c = color === 'red' ? PAL.red : PAL.green;
+  const body = c;
+  // head
+  drawRect(x - 2, y - 9, 5, 4, body);
+  // body
+  drawRect(x - 2, y - 5, 5, 5, body);
+  // arms
+  if (walking && (frame >> 2) % 2) {
+    drawRect(x - 4, y - 4, 2, 3, body);
+    drawRect(x + 3, y - 5, 2, 3, body);
+  } else {
+    drawRect(x - 4, y - 4, 2, 4, body);
+    drawRect(x + 3, y - 4, 2, 4, body);
+  }
+  // legs
+  if (walking && (frame >> 2) % 2) {
+    drawRect(x - 2, y, 2, 3, body);
+    drawRect(x + 1, y + 1, 2, 2, body);
+  } else {
+    drawRect(x - 2, y, 2, 3, body);
+    drawRect(x + 1, y, 2, 3, body);
+  }
+}
+
+function drawCar(c) {
+  drawRect(c.x, c.y, c.w, c.h, c.color);
+  // windows
+  drawRect(c.x + 4, c.y + 2, 5, 4, PAL.cyan);
+  drawRect(c.x + 12, c.y + 2, 5, 4, PAL.cyan);
+  // wheels
+  drawRect(c.x + 2, c.y + 8, 4, 3, PAL.black);
+  drawRect(c.x + 16, c.y + 8, 4, 3, PAL.black);
+}
+
+function draw() {
+  // Clear
+  drawRect(0, 0, W, H, PAL.dark);
+
+  // Top sidewalk
+  drawRect(0, 0, W, 16, PAL.curb);
+  drawRect(0, 14, W, 2, PAL.light);
+
+  // Road
+  drawRect(0, 16, W, 88, PAL.road);
+
+  // Lane markings (dashed)
+  for (let y of [36, 52, 68, 84]) {
+    for (let x = 0; x < W; x += 16) {
+      drawRect(x, y, 8, 1, PAL.yellow);
+    }
+  }
+
+  // Piano keys (white platforms)
+  keys.forEach(k => {
+    drawRect(k.x, k.y, k.w, k.h, PAL.keyW);
+    // slight black key accent on top edge for piano feel
+    drawRect(k.x + 2, k.y, k.w - 4, 2, PAL.keyB);
+  });
+
+  // Bottom sidewalk
+  drawRect(0, 104, W, 16, PAL.curb);
+  drawRect(0, 104, W, 2, PAL.light);
+
+  // Cars
+  cars.forEach(drawCar);
+
+  // Player
+  if (state !== 'menu') {
+    const walking = !player.onGround || Math.abs(player.vx) > 0.1 || Math.abs(player.vy) > 0.1;
+    drawMan(player.x, player.y, manColor, walking);
+  }
+
+  // Overlay messages
+  if (state === 'menu') {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = PAL.yellow;
+    ctx.font = '8px "Press Start 2P"';
+    ctx.textAlign = 'center';
+    ctx.fillText('XWALK', W/2, 40);
+    ctx.fillStyle = PAL.white;
+    ctx.font = '5px "Press Start 2P"';
+    ctx.fillText('Hop the piano keys', W/2, 55);
+    ctx.fillText('Avoid blacktop & cars', W/2, 65);
+    ctx.fillText('60 seconds', W/2, 75);
+  }
+
+  if (state === 'dead' || state === 'win') {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 40, W, 40);
+    ctx.fillStyle = state === 'win' ? PAL.green : PAL.red;
+    ctx.font = '7px "Press Start 2P"';
+    ctx.textAlign = 'center';
+    ctx.fillText(state === 'win' ? 'SAFE!' : 'RUN OVER', W/2, 58);
+    ctx.fillStyle = PAL.white;
+    ctx.font = '4px "Press Start 2P"';
+    ctx.fillText('SPACE / ENTER to retry', W/2, 72);
+  }
+}
+
+// Main loop
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  // Render at logical resolution then the CSS scales it
+  ctx.save();
+  // We draw at 160×120 but canvas is 320×240, so scale
+  ctx.scale(SCALE, SCALE);
+  draw();
+  ctx.restore();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// Touch / click support for mobile (simple hop forward)
+canvas.addEventListener('pointerdown', e => {
+  if (state === 'play' && player.hopCooldown <= 0) {
+    player.vy = -3.0;
+    player.hopCooldown = 12;
+    player.onGround = false;
+    lastMove = performance.now();
+    stillTimer = 0;
+  }
+});
+</script>
+</body>
+</html>
