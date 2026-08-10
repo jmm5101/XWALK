@@ -2,7 +2,7 @@
 
 **Pixelated European-style crosswalk game** featuring the iconic **Red Man** and **Green Man** (Ampelmännchen).
 
-**Side-scroller** (left → right) • **single hold-to-charge button** • touch-first phone game.
+**Side-scroller** (left → right) • single hold-to-charge button • touch-first.
 
 ## Play
 
@@ -11,17 +11,14 @@
 ### How to play
 
 1. Choose **GREEN MAN** or **RED MAN**.
-2. **Green Man** — hold the big button (or the screen) to charge a hop.  
-   - Short hold = short hop  
-   - Long hold = long hop  
-   Release to jump. Land on the zebra stripes or you hit blacktop and get run over. Reach the right side in 60 seconds.
-3. **Red Man** — classic akimbo stop pose. Does not move. Times out after 60 seconds of standing still.
+2. **Green Man** — hold the button to charge a hop (max **2 stripes**). Release to jump. Land on the zebra paint or get run over. Reach the right side in 60 seconds.
+3. **Red Man** — classic akimbo stop pose. Does not move. Times out after 60 seconds.
 
 ### Design
-- One-button hold-to-charge control.
-- Classic zebra crosswalk stripes.
-- Cars stay off the paint.
-- Larger pixel sprites.
-- SAM Coupé inspired look.
+- Cars travel **perpendicular** (up/down) across the crosswalk.
+- Maximum hop distance = 2 zebra stripes.
+- Splash screen shows a pedestrian traffic signal with Red & Green man.
+- Classic zebra stripes.
+- Touch-first hold-to-charge control.
 
 Repo: https://github.com/jmm5101/XWALK

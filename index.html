@@ -108,7 +108,6 @@
     height: 100%;
     width: 0%;
     background: #0a0;
-    transition: none;
   }
 </style>
 </head>
@@ -137,8 +136,9 @@
 
 <script>
 // ============================================================
-// XWALK — Single hold-to-charge hop
-// Hold longer = longer jump. Land on zebra paint or die.
+// XWALK — Hold-to-charge hop, max 2 stripes
+// Cars run perpendicular (vertical) across the zebra
+// Splash = pedestrian traffic signal with Red & Green man
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -166,6 +166,9 @@ const PAL = {
   sky:   '#2a2a4a',
 };
 
+const STRIPE_W = 14;          // width of one zebra stripe
+const MAX_STRIPES = 2;        // cannot jump more than 2 spaces
+
 let state = 'menu';
 let manColor = 'green';
 let timer = 60;
@@ -177,11 +180,10 @@ let player = { x: 28, y: 148, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
 
 const ZEBRA = { y: 132, h: 28 };
 
-// Charge system
 let charging = false;
 let chargeStart = 0;
-let charge = 0;          // 0..1
-const MAX_CHARGE_MS = 900;
+let charge = 0;
+const MAX_CHARGE_MS = 700;
 
 function resetGame(color) {
   manColor = color;
@@ -212,7 +214,7 @@ function resetGame(color) {
 function updateChargeBar() {
   const fill = document.getElementById('charge-fill');
   fill.style.width = (charge * 100) + '%';
-  fill.style.background = charge > 0.75 ? '#ffcc00' : '#0a0';
+  fill.style.background = charge > 0.7 ? '#ffcc00' : '#0a0';
 }
 
 function startCharge(e) {
@@ -236,10 +238,11 @@ function endCharge(e) {
     return;
   }
 
-  // Power based on hold time (min small hop, max long hop)
-  const power = Math.max(0.18, Math.min(1, charge));
-  const hopRight = 3.2 + power * 9.5;   // horizontal distance
-  const hopUp   = 2.0 + power * 3.8;    // vertical lift
+  // Power 0..1, but hard-capped so max jump ≈ 2 stripe widths
+  const power = Math.max(0.2, Math.min(1, charge));
+  const maxDist = STRIPE_W * MAX_STRIPES;          // 28 px
+  const hopRight = 4 + power * (maxDist - 4);      // 4 .. 28
+  const hopUp   = 1.8 + power * 2.4;
 
   player.vx = hopRight;
   player.vy = -hopUp;
@@ -252,14 +255,12 @@ function endCharge(e) {
   updateChargeBar();
 }
 
-// Button events
 const holdBtn = document.getElementById('hold-btn');
 holdBtn.addEventListener('pointerdown', startCharge);
 holdBtn.addEventListener('pointerup', endCharge);
 holdBtn.addEventListener('pointerleave', endCharge);
 holdBtn.addEventListener('pointercancel', endCharge);
 
-// Also allow holding on the canvas itself
 canvas.addEventListener('pointerdown', e => {
   if (state === 'play' && manColor === 'green') {
     startCharge(e);
@@ -289,16 +290,18 @@ function isOnSafe(px, py) {
 }
 
 function spawnCar() {
-  const fromLeft = Math.random() < 0.5;
-  const above = Math.random() < 0.5;
-  const y = above ? 78 + Math.random() * 28 : 168 + Math.random() * 18;
+  // Cars travel VERTICALLY (perpendicular to the horizontal zebra)
+  const fromTop = Math.random() < 0.5;
+  // Several horizontal lanes across the road
+  const laneX = 55 + Math.floor(Math.random() * 10) * 26;
 
   cars.push({
-    x: fromLeft ? -50 : W + 20,
-    y: y,
-    w: 42,
-    h: 18,
-    vx: fromLeft ? (2.0 + Math.random() * 2.2) : -(2.0 + Math.random() * 2.2),
+    x: laneX,
+    y: fromTop ? 55 : 195,
+    w: 18,
+    h: 28,
+    vx: 0,
+    vy: fromTop ? (1.8 + Math.random() * 1.6) : -(1.8 + Math.random() * 1.6),
     color: Math.random() < 0.28 ? PAL.red : (Math.random() < 0.5 ? PAL.blue : PAL.orange)
   });
 }
@@ -307,7 +310,6 @@ function update(dt) {
   if (state !== 'play') return;
   frame++;
 
-  // Update charge while holding
   if (charging) {
     const held = performance.now() - chargeStart;
     charge = Math.min(1, held / MAX_CHARGE_MS);
@@ -340,12 +342,11 @@ function update(dt) {
     player.y += player.vy;
 
     if (!player.onGround) {
-      player.vy += 0.28; // gravity
+      player.vy += 0.30;
     }
 
-    player.vx *= 0.985; // slight air drag
+    player.vx *= 0.98;
 
-    // Landing
     if (player.vy > 0 && isOnSafe(player.x, player.y)) {
       if (player.x > 42 && player.x < 318) {
         player.y = ZEBRA.y + 18;
@@ -357,7 +358,6 @@ function update(dt) {
       player.onGround = true;
     }
 
-    // Fell onto blacktop
     if (player.vy > 0 && player.y > ZEBRA.y + ZEBRA.h + 8 && player.x > 42 && player.x < 318) {
       state = 'dead';
       document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
@@ -369,7 +369,6 @@ function update(dt) {
     player.x = Math.max(14, Math.min(346, player.x));
     player.y = Math.max(50, Math.min(180, player.y));
 
-    // Final settle check
     if (player.onGround && !isOnSafe(player.x, player.y)) {
       state = 'dead';
       document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
@@ -379,17 +378,12 @@ function update(dt) {
     }
   }
 
-  if (frame % 36 === 0) spawnCar();
+  if (frame % 40 === 0) spawnCar();
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
-    c.x += c.vx;
+    c.y += c.vy;
 
-    if (c.y + c.h > ZEBRA.y && c.y < ZEBRA.y + ZEBRA.h) {
-      if (c.y < ZEBRA.y + ZEBRA.h / 2) c.y = ZEBRA.y - c.h - 3;
-      else c.y = ZEBRA.y + ZEBRA.h + 3;
-    }
-
-    if (c.x < -60 || c.x > W + 40) {
+    if (c.y < 40 || c.y > 210) {
       cars.splice(i, 1);
       continue;
     }
@@ -425,6 +419,7 @@ function drawMan(x, y, color, isRed) {
   const c = color === 'red' ? PAL.red : PAL.green;
 
   if (isRed) {
+    // Akimbo
     drawRect(x - 6, y - 20, 12, 9, c);
     drawRect(x - 5, y - 11, 10, 11, c);
     drawRect(x - 16, y - 9, 11, 6, c);
@@ -455,29 +450,44 @@ function drawMan(x, y, color, isRed) {
 }
 
 function drawCar(c) {
+  // Vertical-oriented car (taller than wide)
   drawRect(c.x, c.y, c.w, c.h, c.color);
-  drawRect(c.x + 7, c.y + 3, 9, 7, PAL.cyan);
-  drawRect(c.x + 22, c.y + 3, 9, 7, PAL.cyan);
-  drawRect(c.x + 4, c.y + 13, 7, 6, PAL.black);
-  drawRect(c.x + 30, c.y + 13, 7, 6, PAL.black);
+  drawRect(c.x + 3, c.y + 4, 12, 6, PAL.cyan);
+  drawRect(c.x + 3, c.y + 14, 12, 6, PAL.cyan);
+  drawRect(c.x + 1, c.y + 2, 4, 4, PAL.black);
+  drawRect(c.x + 13, c.y + 2, 4, 4, PAL.black);
+  drawRect(c.x + 1, c.y + 22, 4, 4, PAL.black);
+  drawRect(c.x + 13, c.y + 22, 4, 4, PAL.black);
 }
 
 function drawZebra() {
   const y = ZEBRA.y;
   const h = ZEBRA.h;
-  const stripeW = 14;
   let x = 42;
   let light = true;
-
   while (x < 318) {
-    if (light) {
-      drawRect(x, y, stripeW, h, PAL.stripe);
-    }
-    x += stripeW;
+    if (light) drawRect(x, y, STRIPE_W, h, PAL.stripe);
+    x += STRIPE_W;
     light = !light;
   }
   drawRect(42, y, 276, 1, '#d0c8b0');
   drawRect(42, y + h - 1, 276, 1, '#b0a890');
+}
+
+// Pedestrian traffic signal for splash (Red on top, Green on bottom)
+function drawPedSignal(cx, cy) {
+  // housing
+  drawRect(cx - 18, cy - 38, 36, 76, '#222');
+  drawRect(cx - 16, cy - 36, 32, 72, '#111');
+  // top lens (red man)
+  drawRect(cx - 12, cy - 32, 24, 28, '#330000');
+  drawMan(cx, cy - 18, 'red', true);
+  // bottom lens (green man)
+  drawRect(cx - 12, cy + 2, 24, 28, '#003300');
+  drawMan(cx, cy + 16, 'green', false);
+  // little visor lines
+  drawRect(cx - 16, cy - 36, 32, 2, '#444');
+  drawRect(cx - 16, cy - 2, 32, 2, '#444');
 }
 
 function draw() {
@@ -512,26 +522,28 @@ function draw() {
     drawMan(player.x, player.y, manColor, manColor === 'red');
   }
 
-  // Charge indicator above player while holding
   if (charging && manColor === 'green') {
     const barW = 28;
-    const barH = 4;
-    drawRect(player.x - barW/2, player.y - 30, barW, barH, '#111');
-    drawRect(player.x - barW/2, player.y - 30, barW * charge, barH, charge > 0.75 ? PAL.yellow : PAL.green);
+    drawRect(player.x - barW/2, player.y - 30, barW, 4, '#111');
+    drawRect(player.x - barW/2, player.y - 30, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
   }
 
   if (state === 'menu') {
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(0, 0, W, H);
+
+    // Pedestrian signal
+    drawPedSignal(W / 2, 78);
+
     ctx.fillStyle = PAL.yellow;
-    ctx.font = '18px "Press Start 2P"';
+    ctx.font = '16px "Press Start 2P"';
     ctx.textAlign = 'center';
-    ctx.fillText('XWALK', W / 2, 55);
+    ctx.fillText('XWALK', W / 2, 145);
+
     ctx.fillStyle = PAL.white;
-    ctx.font = '8px "Press Start 2P"';
-    ctx.fillText('Hold to charge hop', W / 2, 85);
-    ctx.fillText('Land on the stripes', W / 2, 102);
-    ctx.fillText('Green hops  •  Red stands', W / 2, 119);
+    ctx.font = '7px "Press Start 2P"';
+    ctx.fillText('Hold to charge hop', W / 2, 165);
+    ctx.fillText('Max 2 stripes  •  Land on paint', W / 2, 178);
   }
 
   if (state === 'dead' || state === 'win') {
