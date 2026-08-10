@@ -137,8 +137,7 @@
 <script>
 // ============================================================
 // XWALK
-// Ampelmännchen redrawn from scratch to fit signal heads
-// Feet locked • half speed • 15s timer • max 3 paint blocks
+// Max hop hard-capped at 3.5 paint blocks
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -167,7 +166,7 @@ const PAL = {
 };
 
 const STRIPE_W = 14;
-const MAX_STRIPES = 3;          // max 3 paint blocks
+const MAX_BLOCKS = 3.5;         // hard maximum hop distance in paint blocks
 const ZEBRA_LEFT = 42;
 const ZEBRA_RIGHT = 318;
 
@@ -178,14 +177,14 @@ let stillTimer = 0;
 let lastMove = 0;
 let frame = 0;
 let cars = [];
-let player = { x: 28, y: 148, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
+let player = { x: 28, y: 148, vx: 0, vy: 0, onGround: true, hopCooldown: 0, hopOriginX: 0, hopMaxX: 0 };
 
 const ZEBRA = { y: 132, h: 28 };
 
 let charging = false;
 let chargeStart = 0;
 let charge = 0;
-const MAX_CHARGE_MS = 900;      // slightly longer charge feel at half speed
+const MAX_CHARGE_MS = 900;
 
 function isWhiteStripe(px) {
   if (px < ZEBRA_LEFT || px > ZEBRA_RIGHT) return false;
@@ -212,7 +211,7 @@ function resetGame(color) {
   lastMove = performance.now();
   frame = 0;
   cars = [];
-  player = { x: 28, y: 148, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
+  player = { x: 28, y: 148, vx: 0, vy: 0, onGround: true, hopCooldown: 0, hopOriginX: 0, hopMaxX: 0 };
   charging = false;
   charge = 0;
   updateChargeBar();
@@ -257,16 +256,22 @@ function endCharge(e) {
     return;
   }
 
-  const power = Math.max(0.2, Math.min(1, charge));
-  const maxDist = STRIPE_W * MAX_STRIPES;   // 3 stripes
-  // half the previous hop speeds
-  const hopRight = 2.2 + power * (maxDist * 0.55);
-  const hopUp   = 1.0 + power * 1.4;
+  // power 0.25 .. 1.0
+  const power = Math.max(0.25, Math.min(1, charge));
 
-  player.vx = hopRight;
-  player.vy = -hopUp;
+  // Hard distance cap: never more than 3.5 paint blocks
+  const maxTravel = STRIPE_W * MAX_BLOCKS;          // 49 px
+  const travel = maxTravel * power;                 // scaled by charge
+
+  player.hopOriginX = player.x;
+  player.hopMaxX = player.x + travel;
+
+  // Calibrated velocity + strong damping so total travel ≈ travel distance
+  // With vx *= 0.82 each frame, distance ≈ vx0 / 0.18
+  player.vx = travel * 0.18;
+  player.vy = -(1.2 + power * 1.6);
   player.onGround = false;
-  player.hopCooldown = 16;   // longer cooldown at half speed
+  player.hopCooldown = 14;
   lastMove = performance.now();
   stillTimer = 0;
 
@@ -317,7 +322,7 @@ function triggerCarHit(px) {
     w: 18,
     h: 28,
     vx: 0,
-    vy: 3.5,          // half previous car slam speed
+    vy: 3.5,
     color: PAL.red
   });
   state = 'dead';
@@ -338,7 +343,6 @@ function spawnCar() {
     w: 18,
     h: 28,
     vx: 0,
-    // half previous car speed
     vy: fromTop ? (0.9 + Math.random() * 0.8) : -(0.9 + Math.random() * 0.8),
     color: Math.random() < 0.28 ? PAL.red : (Math.random() < 0.5 ? PAL.blue : PAL.orange)
   });
@@ -379,9 +383,14 @@ function update(dt) {
     player.x += player.vx;
     player.y += player.vy;
 
-    // half gravity / drag feel
-    if (!player.onGround) player.vy += 0.15;
-    player.vx *= 0.99;
+    // Hard stop at hopMaxX so we never travel more than 3.5 blocks
+    if (player.hopMaxX > 0 && player.x > player.hopMaxX) {
+      player.x = player.hopMaxX;
+      player.vx = 0;
+    }
+
+    if (!player.onGround) player.vy += 0.16;
+    player.vx *= 0.82;   // stronger damping for predictable short hops
 
     if (player.vy > 0) {
       if (player.y >= ZEBRA.y && player.y <= ZEBRA.y + ZEBRA.h + 8) {
@@ -390,6 +399,7 @@ function update(dt) {
           player.vy = 0;
           player.vx = 0;
           player.onGround = true;
+          player.hopMaxX = 0;
         } else if (player.x > ZEBRA_LEFT && player.x < ZEBRA_RIGHT) {
           triggerCarHit(player.x);
           return;
@@ -399,6 +409,7 @@ function update(dt) {
         player.vy = 0;
         player.vx = 0;
         player.onGround = true;
+        player.hopMaxX = 0;
       } else if (player.y > ZEBRA.y + ZEBRA.h + 10) {
         triggerCarHit(player.x);
         return;
@@ -414,7 +425,6 @@ function update(dt) {
     }
   }
 
-  // half spawn rate
   if (frame % 80 === 0) spawnCar();
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
@@ -450,78 +460,58 @@ function drawRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
-// ============================================================
-// AMPELMÄNNCHEN REDRAWN FROM SCRATCH
-// Sized to fit cleanly inside the signal-head lenses
-// Feet are locked (no foot animation)
-// ============================================================
-
 function drawRedMan(x, y, scale) {
   const s = scale || 1;
   const c = PAL.red;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Hat — wide brim + peaked crown (fits lens)
-  p(-8, -22, 16, 2);      // brim
-  p(-6, -25, 12, 4);      // crown
-  p(-7, -23, 2, 2);       // left peak tip
-  p(5, -23, 2, 2);        // right peak tip
+  p(-8, -22, 16, 2);
+  p(-6, -25, 12, 4);
+  p(-7, -23, 2, 2);
+  p(5, -23, 2, 2);
 
-  // Head
   p(-5, -20, 10, 6);
 
-  // Body / coat
   p(-6, -14, 12, 12);
   p(-7, -4, 14, 5);
 
-  // Arms straight out + rounded hands (classic stop)
   p(-14, -11, 8, 3);
-  p(-16, -10, 4, 4);      // left hand
+  p(-16, -10, 4, 4);
   p(6, -11, 8, 3);
-  p(12, -10, 4, 4);       // right hand
+  p(12, -10, 4, 4);
 
-  // Legs locked together + solid base (feet do not move)
   p(-4, 1, 3, 7);
   p(1, 1, 3, 7);
-  p(-5, 7, 10, 2);        // fixed feet / base
+  p(-5, 7, 10, 2);
 }
 
 function drawGreenMan(x, y, scale) {
-  // Static walking silhouette — feet locked, no leg animation
   const s = scale || 1;
   const c = PAL.green;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Hat
   p(-7, -23, 15, 2);
   p(-5, -26, 11, 4);
   p(-6, -24, 2, 2);
   p(4, -24, 2, 2);
 
-  // Head
   p(-4, -21, 10, 6);
 
-  // Body
   p(-5, -15, 11, 11);
 
-  // Arms in classic stride pose (static)
-  p(5, -12, 7, 3);        // front arm
+  p(5, -12, 7, 3);
   p(10, -11, 3, 3);
-  p(-9, -11, 5, 3);       // back arm
+  p(-9, -11, 5, 3);
 
-  // Legs in fixed stride — feet locked in place
-  p(-5, -3, 4, 7);        // back leg
-  p(2, -1, 5, 8);         // front leg
-  p(-6, 4, 4, 2);         // back foot (fixed)
-  p(5, 6, 4, 2);          // front foot (fixed)
+  p(-5, -3, 4, 7);
+  p(2, -1, 5, 8);
+  p(-6, 4, 4, 2);
+  p(5, 6, 4, 2);
 }
 
 function drawMan(x, y, color, isRed) {
-  if (isRed) {
-    drawRedMan(x, y, 1);
-  } else {
-    drawGreenMan(x, y, 1);   // no walking frame toggle — feet never move
-  }
+  if (isRed) drawRedMan(x, y, 1);
+  else drawGreenMan(x, y, 1);
 }
 
 function drawCar(c) {
@@ -549,24 +539,19 @@ function drawZebra() {
 }
 
 function drawPedSignal(cx, cy) {
-  // Signal housing sized so figures sit cleanly inside each lens
   drawRect(cx - 36, cy - 70, 72, 144, '#222');
   drawRect(cx - 32, cy - 66, 64, 136, '#0a0a0a');
 
-  // Red lens
   drawRect(cx - 26, cy - 60, 52, 56, '#1a0000');
   drawRect(cx - 24, cy - 58, 48, 52, '#2a0000');
   drawRedMan(cx, cy - 34, 1.55);
 
-  // Divider
   drawRect(cx - 32, cy - 2, 64, 4, '#333');
 
-  // Green lens
   drawRect(cx - 26, cy + 4, 52, 56, '#001a08');
   drawRect(cx - 24, cy + 6, 48, 52, '#002a10');
   drawGreenMan(cx, cy + 30, 1.55);
 
-  // Rims
   drawRect(cx - 32, cy - 66, 64, 2, '#444');
   drawRect(cx - 32, cy - 4, 64, 2, '#444');
   drawRect(cx - 32, cy + 58, 64, 2, '#444');
