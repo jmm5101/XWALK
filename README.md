@@ -2,30 +2,25 @@
 
 **Pixelated European-style crosswalk game** featuring the iconic **Red Man** and **Green Man** (Ampelmännchen).
 
-Hop across the **piano-key crosswalk**. Land on blacktop and you get run over by a car.
+Primarily designed as a **touch-screen phone game**.
 
 ## Play
 
-Open [index.html](index.html) in any modern browser (or enable GitHub Pages).
+**https://htmlpreview.github.io/?https://github.com/jmm5101/XWALK/blob/main/index.html**
 
-### Controls
-- **Arrow keys** or **WASD** — hop in that direction
-- **Click / tap** — hop forward
-- Reach the far sidewalk within **60 seconds**
+Or open `index.html` directly / enable GitHub Pages for a permanent link.
 
-### Rules
-- Choose **Green Man** (Go) or **Red Man** (Stop) at the start.
-- Green Man hops freely but must finish in 60 s.
-- Red Man also has a 60-second standing-still timeout — keep moving!
-- Only the light-colored piano keys (and sidewalks) are safe.
-- Cars travel the blacktop lanes. Getting hit = game over.
+### How to play
 
-## Style
+1. Choose **GREEN MAN** or **RED MAN**.
+2. **Green Man** — hop across the single piano-key crosswalk using the big on-screen buttons (or tap the screen). Reach the far sidewalk in 60 seconds. Land on blacktop or get hit by a car = run over.
+3. **Red Man** — classic akimbo (arms out) stop pose. He does **not** move. He simply stands still and times out after 60 seconds.
 
-Chunky low-resolution pixel graphics inspired by the **SAM Coupé** (limited palette, crisp scaling, retro feel).
-
-## Project
-
-Created as a fun one-file HTML5 Canvas game.
+### Design notes
+- Single continuous piano-key style crosswalk (the painted stripe).
+- Cars drive only on the asphalt and never over the piano-key paint.
+- Larger, higher-resolution pixel sprites.
+- Touch-first controls (no keyboard required).
+- SAM Coupé inspired chunky pixel look.
 
 Repo: https://github.com/jmm5101/XWALK

@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>XWALK — Red & Green Man</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   body {
     background: #1a1a2e;
     color: #eee;
@@ -14,58 +14,102 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     min-height: 100vh;
     overflow: hidden;
-    image-rendering: pixelated;
+    padding-top: 8px;
+    touch-action: none;
   }
   h1 {
-    font-size: 18px;
-    margin-bottom: 8px;
+    font-size: 16px;
+    margin-bottom: 6px;
     color: #ffcc00;
     text-shadow: 2px 2px 0 #000;
   }
   #game-wrap {
     position: relative;
     border: 4px solid #444;
-    box-shadow: 0 0 20px #000;
+    box-shadow: 0 0 16px #000;
+    max-width: 100vw;
   }
   canvas {
     display: block;
+    width: 100%;
+    max-width: 640px;
+    height: auto;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     background: #111;
-    cursor: none;
+    touch-action: none;
   }
   #ui {
-    margin-top: 12px;
+    width: 100%;
+    max-width: 640px;
+    margin-top: 8px;
     text-align: center;
     font-size: 10px;
-    line-height: 1.6;
+    line-height: 1.5;
+    padding: 0 8px;
   }
   .btn {
     display: inline-block;
-    padding: 10px 16px;
+    padding: 12px 18px;
     margin: 6px;
     background: #222;
     border: 3px solid #666;
     color: #fff;
     font-family: inherit;
-    font-size: 11px;
+    font-size: 12px;
     cursor: pointer;
-    image-rendering: pixelated;
+    user-select: none;
   }
-  .btn:hover, .btn:focus { border-color: #ffcc00; color: #ffcc00; }
+  .btn:active { transform: scale(0.96); }
   .btn.red { border-color: #c00; color: #f66; }
   .btn.green { border-color: #0a0; color: #6f6; }
-  #timer { color: #ffcc00; }
-  #msg { min-height: 24px; margin-top: 8px; }
+  #timer { color: #ffcc00; font-size: 14px; }
+  #msg { min-height: 28px; margin: 6px 0; font-size: 11px; }
+
+  /* Touch controls — big for phones */
+  #touch-controls {
+    display: none;
+    width: 100%;
+    max-width: 640px;
+    margin-top: 10px;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+  .tbtn {
+    width: 72px;
+    height: 72px;
+    background: #222;
+    border: 4px solid #555;
+    color: #fff;
+    font-size: 28px;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    border-radius: 8px;
+  }
+  .tbtn:active, .tbtn.active {
+    background: #333;
+    border-color: #ffcc00;
+    color: #ffcc00;
+  }
+  .tbtn.fwd {
+    width: 88px;
+    height: 88px;
+    font-size: 32px;
+    border-color: #0a0;
+  }
 </style>
 </head>
 <body>
   <h1>XWALK</h1>
   <div id="game-wrap">
-    <canvas id="c" width="320" height="240"></canvas>
+    <canvas id="c" width="640" height="480"></canvas>
   </div>
   <div id="ui">
     <div id="msg">Choose your man</div>
@@ -74,25 +118,32 @@
       <button class="btn green" id="btn-green">GREEN MAN</button>
     </div>
     <div id="hud" style="display:none">
-      TIME <span id="timer">60</span>s &nbsp;|&nbsp; ARROWS / WASD to hop
+      <span id="timer">60</span>s
     </div>
+  </div>
+
+  <!-- Big touch buttons (Green Man only) -->
+  <div id="touch-controls">
+    <button class="tbtn" id="t-left">◀</button>
+    <button class="tbtn fwd" id="t-fwd">▲</button>
+    <button class="tbtn" id="t-right">▶</button>
   </div>
 
 <script>
 // ============================================================
 // XWALK — Pixel Ampelmännchen Piano-Key Crosswalk
-// SAM Coupé inspired limited palette + chunky pixels
+// Touch-first • Larger sprites • Single piano-key stripe
+// Red Man locked in classic akimbo pose
 // ============================================================
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-// Scale for crisp pixels (internal 160×120 logical, displayed 320×240)
-const SCALE = 2;
-const W = 160, H = 120;
+// Higher internal resolution (2× previous)
+const W = 320, H = 240;
+const SCALE = 2; // canvas is 640×480
 
-// SAM-ish 16-color inspired palette
 const PAL = {
   black: '#000000',
   dark:  '#1a1a2e',
@@ -105,65 +156,22 @@ const PAL = {
   blue:  '#2244aa',
   cyan:  '#44aaaa',
   orange:'#cc6600',
-  pink:  '#cc4488',
-  road:  '#222222',
+  road:  '#1e1e1e',
   curb:  '#666666',
-  keyW:  '#e8e0c8',  // piano white
-  keyB:  '#1a1a1a',  // piano black
+  keyW:  '#e8e0c8',
+  keyB:  '#111111',
 };
 
 // Game state
-let state = 'menu'; // menu | play | dead | win
-let manColor = 'green'; // 'red' | 'green'
+let state = 'menu';
+let manColor = 'green';
 let timer = 60;
-let stillTimer = 0; // for red man standing-still timeout
+let stillTimer = 0;
 let lastMove = 0;
 let frame = 0;
 let cars = [];
-let keys = []; // piano key platforms
-let player = { x: 80, y: 108, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
-
-// Piano-key layout: several rows of white keys across the road
-// Road occupies roughly y = 20 to 100
-function buildKeys() {
-  keys = [];
-  // Bottom sidewalk safe zone is y>100, top y<18
-  // Create 5 rows of alternating-offset white keys
-  const rows = [
-    { y: 88, count: 6, offset: 8 },
-    { y: 72, count: 5, offset: 20 },
-    { y: 56, count: 6, offset: 4 },
-    { y: 40, count: 5, offset: 16 },
-    { y: 24, count: 6, offset: 10 },
-  ];
-  rows.forEach((r, ri) => {
-    const gap = 160 / r.count;
-    for (let i = 0; i < r.count; i++) {
-      const kw = 18 + (i % 2);
-      keys.push({
-        x: r.offset + i * gap,
-        y: r.y,
-        w: kw,
-        h: 10,
-        row: ri
-      });
-    }
-  });
-}
-
-function spawnCar() {
-  const dir = Math.random() < 0.5 ? 1 : -1;
-  const laneYs = [30, 46, 62, 78];
-  const y = laneYs[Math.floor(Math.random() * laneYs.length)];
-  cars.push({
-    x: dir > 0 ? -30 : 190,
-    y: y,
-    w: 22,
-    h: 10,
-    vx: dir * (1.2 + Math.random() * 1.4),
-    color: Math.random() < 0.3 ? PAL.red : (Math.random() < 0.5 ? PAL.blue : PAL.orange)
-  });
-}
+let piano = { y: 108, h: 28 }; // single continuous piano-key band
+let player = { x: 160, y: 210, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
 
 function resetGame(color) {
   manColor = color;
@@ -173,173 +181,271 @@ function resetGame(color) {
   lastMove = performance.now();
   frame = 0;
   cars = [];
-  player = { x: 80, y: 108, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
-  buildKeys();
+  player = { x: 160, y: 210, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
+
   document.getElementById('menu').style.display = 'none';
   document.getElementById('hud').style.display = 'block';
   document.getElementById('msg').textContent = '';
+
+  // Show touch controls only for Green Man
+  const tc = document.getElementById('touch-controls');
+  if (color === 'green') {
+    tc.style.display = 'flex';
+  } else {
+    tc.style.display = 'none';
+    document.getElementById('msg').textContent = 'RED MAN stands akimbo…';
+  }
 }
 
-// Input
-const keysDown = {};
-window.addEventListener('keydown', e => {
-  keysDown[e.code] = true;
-  if (state === 'play' && player.hopCooldown <= 0) {
-    let hopped = false;
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') { player.vy = -3.2; hopped = true; }
-    if (e.code === 'ArrowDown' || e.code === 'KeyS') { player.vy = 2.4; hopped = true; }
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') { player.vx = -2.6; hopped = true; }
-    if (e.code === 'ArrowRight' || e.code === 'KeyD') { player.vx = 2.6; hopped = true; }
-    if (hopped) {
-      player.hopCooldown = 12;
-      player.onGround = false;
-      lastMove = performance.now();
-      stillTimer = 0;
-    }
-  }
-  if ((state === 'dead' || state === 'win') && (e.code === 'Space' || e.code === 'Enter')) {
+// Touch / button hop helpers (Green only)
+function doHop(dx, dy) {
+  if (state !== 'play' || manColor !== 'green' || player.hopCooldown > 0) return;
+  player.vx = dx;
+  player.vy = dy;
+  player.hopCooldown = 14;
+  player.onGround = false;
+  lastMove = performance.now();
+  stillTimer = 0;
+}
+
+document.getElementById('t-left').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  doHop(-4.5, -1.5);
+});
+document.getElementById('t-right').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  doHop(4.5, -1.5);
+});
+document.getElementById('t-fwd').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  doHop(0, -5.0);
+});
+
+// Also allow tapping the canvas for forward hop (Green)
+canvas.addEventListener('pointerdown', e => {
+  if (state === 'play' && manColor === 'green') {
+    doHop(0, -5.0);
+  } else if (state === 'dead' || state === 'win') {
+    // tap to return to menu
     state = 'menu';
     document.getElementById('menu').style.display = 'block';
     document.getElementById('hud').style.display = 'none';
+    document.getElementById('touch-controls').style.display = 'none';
     document.getElementById('msg').textContent = 'Choose your man';
   }
 });
-window.addEventListener('keyup', e => { keysDown[e.code] = false; });
 
 document.getElementById('btn-red').onclick = () => resetGame('red');
 document.getElementById('btn-green').onclick = () => resetGame('green');
 
-// Physics & collision helpers
 function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-function isOnKey(px, py) {
-  // player is roughly 8x10
-  const p = { x: px - 4, y: py - 8, w: 8, h: 10 };
-  for (const k of keys) {
-    if (rectsOverlap(p, k)) return true;
-  }
-  // sidewalks
-  if (py >= 104 || py <= 16) return true;
+// Safe zones: sidewalks + the single piano-key band
+function isOnSafe(px, py) {
+  // player hitbox ~16×20
+  const footY = py;
+  // bottom sidewalk
+  if (footY >= 200) return true;
+  // top sidewalk
+  if (footY <= 36) return true;
+  // piano key band
+  if (footY >= piano.y && footY <= piano.y + piano.h) return true;
   return false;
+}
+
+function spawnCar() {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  // Only spawn in blacktop zones — never on the piano paint
+  // Upper road: y 40–100, lower road: y 140–190
+  const upper = Math.random() < 0.55;
+  const y = upper
+    ? 48 + Math.floor(Math.random() * 40)
+    : 148 + Math.floor(Math.random() * 30);
+  cars.push({
+    x: dir > 0 ? -40 : 360,
+    y: y,
+    w: 36,
+    h: 16,
+    vx: dir * (1.6 + Math.random() * 1.8),
+    color: Math.random() < 0.3 ? PAL.red : (Math.random() < 0.5 ? PAL.blue : PAL.orange)
+  });
 }
 
 function update(dt) {
   if (state !== 'play') return;
   frame++;
 
-  // Timer
+  // Global 60 s timer
   timer -= dt;
   if (timer <= 0) {
     timer = 0;
     state = 'dead';
     document.getElementById('msg').textContent = 'TIME UP — RUN OVER!';
+    document.getElementById('touch-controls').style.display = 'none';
     return;
   }
 
-  // Red man standing-still timeout
+  // Red Man: locked, pure standing-still timeout
   if (manColor === 'red') {
     stillTimer = (performance.now() - lastMove) / 1000;
     if (stillTimer >= 60) {
       state = 'dead';
-      document.getElementById('msg').textContent = 'RED MAN TIMED OUT (stood still 60s)';
+      document.getElementById('msg').textContent = 'RED MAN TIMED OUT';
       return;
+    }
+    // Red never moves
+    player.vx = 0;
+    player.vy = 0;
+  } else {
+    // Green hop physics
+    if (player.hopCooldown > 0) player.hopCooldown--;
+
+    player.x += player.vx;
+    player.y += player.vy;
+
+    player.vx *= 0.78;
+    player.vy *= 0.78;
+    if (Math.abs(player.vx) < 0.2) player.vx = 0;
+    if (Math.abs(player.vy) < 0.2) player.vy = 0;
+
+    player.x = Math.max(12, Math.min(308, player.x));
+    player.y = Math.max(20, Math.min(220, player.y));
+
+    if (Math.abs(player.vx) < 0.25 && Math.abs(player.vy) < 0.25) {
+      player.onGround = true;
+      if (!isOnSafe(player.x, player.y)) {
+        state = 'dead';
+        document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
+        document.getElementById('touch-controls').style.display = 'none';
+        return;
+      }
     }
   }
 
-  // Hop physics (simple arcade)
-  if (player.hopCooldown > 0) player.hopCooldown--;
-
-  player.x += player.vx;
-  player.y += player.vy;
-
-  // Friction / settle
-  player.vx *= 0.82;
-  player.vy *= 0.82;
-  if (Math.abs(player.vx) < 0.15) player.vx = 0;
-  if (Math.abs(player.vy) < 0.15) player.vy = 0;
-
-  // Clamp
-  player.x = Math.max(6, Math.min(154, player.x));
-  player.y = Math.max(8, Math.min(112, player.y));
-
-  // Landing check
-  if (Math.abs(player.vx) < 0.2 && Math.abs(player.vy) < 0.2) {
-    player.onGround = true;
-    // Did we land on blacktop?
-    if (!isOnKey(player.x, player.y)) {
-      state = 'dead';
-      document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
-      return;
-    }
-  }
-
-  // Cars
-  if (frame % 45 === 0) spawnCar();
+  // Cars (never overlap piano band)
+  if (frame % 38 === 0) spawnCar();
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
     c.x += c.vx;
-    if (c.x < -40 || c.x > 200) { cars.splice(i, 1); continue; }
+    if (c.x < -50 || c.x > 370) {
+      cars.splice(i, 1);
+      continue;
+    }
+    // Safety: push car out of piano band if somehow overlapping
+    if (c.y + c.h > piano.y && c.y < piano.y + piano.h) {
+      if (c.y < piano.y + piano.h / 2) c.y = piano.y - c.h - 2;
+      else c.y = piano.y + piano.h + 2;
+    }
 
-    // Collision with player
-    const pbox = { x: player.x - 4, y: player.y - 8, w: 8, h: 10 };
-    if (rectsOverlap(pbox, c)) {
-      state = 'dead';
-      document.getElementById('msg').textContent = 'HIT BY CAR — RUN OVER!';
-      return;
+    if (manColor === 'green') {
+      const pbox = { x: player.x - 8, y: player.y - 16, w: 16, h: 20 };
+      if (rectsOverlap(pbox, c)) {
+        state = 'dead';
+        document.getElementById('msg').textContent = 'HIT BY CAR — RUN OVER!';
+        document.getElementById('touch-controls').style.display = 'none';
+        return;
+      }
     }
   }
 
-  // Win condition: reach top sidewalk
-  if (player.y <= 16) {
+  // Win (Green only)
+  if (manColor === 'green' && player.y <= 34) {
     state = 'win';
-    document.getElementById('msg').textContent = 'YOU CROSSED!  WELL DONE';
+    document.getElementById('msg').textContent = 'YOU CROSSED!';
+    document.getElementById('touch-controls').style.display = 'none';
   }
 
   document.getElementById('timer').textContent = Math.ceil(timer);
 }
 
-// Drawing helpers — chunky pixel style
 function drawRect(x, y, w, h, color) {
   ctx.fillStyle = color;
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
-function drawMan(x, y, color, walking) {
-  // Simple 8×10 Ampelmännchen-style pixel figure
+// Larger 16×20 Ampelmännchen-style sprites (2× previous)
+function drawMan(x, y, color, isRed) {
   const c = color === 'red' ? PAL.red : PAL.green;
-  const body = c;
-  // head
-  drawRect(x - 2, y - 9, 5, 4, body);
-  // body
-  drawRect(x - 2, y - 5, 5, 5, body);
-  // arms
-  if (walking && (frame >> 2) % 2) {
-    drawRect(x - 4, y - 4, 2, 3, body);
-    drawRect(x + 3, y - 5, 2, 3, body);
+
+  if (isRed) {
+    // Classic Red Man — arms akimbo / outstretched, legs together (stop pose)
+    // head
+    drawRect(x - 5, y - 18, 10, 8, c);
+    // body
+    drawRect(x - 4, y - 10, 8, 10, c);
+    // arms fully out (akimbo)
+    drawRect(x - 14, y - 8, 10, 5, c);
+    drawRect(x + 4, y - 8, 10, 5, c);
+    // hands
+    drawRect(x - 16, y - 7, 3, 3, c);
+    drawRect(x + 13, y - 7, 3, 3, c);
+    // legs together
+    drawRect(x - 3, y, 3, 8, c);
+    drawRect(x + 1, y, 3, 8, c);
   } else {
-    drawRect(x - 4, y - 4, 2, 4, body);
-    drawRect(x + 3, y - 4, 2, 4, body);
-  }
-  // legs
-  if (walking && (frame >> 2) % 2) {
-    drawRect(x - 2, y, 2, 3, body);
-    drawRect(x + 1, y + 1, 2, 2, body);
-  } else {
-    drawRect(x - 2, y, 2, 3, body);
-    drawRect(x + 1, y, 2, 3, body);
+    // Green Man — walking / hopping pose
+    const walk = (frame >> 2) % 2;
+    // head
+    drawRect(x - 5, y - 18, 10, 8, c);
+    // body
+    drawRect(x - 4, y - 10, 8, 10, c);
+    // arms swinging
+    if (walk) {
+      drawRect(x - 10, y - 8, 6, 5, c);
+      drawRect(x + 4, y - 9, 6, 5, c);
+    } else {
+      drawRect(x - 10, y - 9, 6, 5, c);
+      drawRect(x + 4, y - 8, 6, 5, c);
+    }
+    // legs hopping
+    if (walk) {
+      drawRect(x - 4, y, 4, 7, c);
+      drawRect(x + 2, y + 2, 4, 6, c);
+    } else {
+      drawRect(x - 4, y + 1, 4, 6, c);
+      drawRect(x + 2, y, 4, 7, c);
+    }
   }
 }
 
 function drawCar(c) {
   drawRect(c.x, c.y, c.w, c.h, c.color);
-  // windows
-  drawRect(c.x + 4, c.y + 2, 5, 4, PAL.cyan);
-  drawRect(c.x + 12, c.y + 2, 5, 4, PAL.cyan);
-  // wheels
-  drawRect(c.x + 2, c.y + 8, 4, 3, PAL.black);
-  drawRect(c.x + 16, c.y + 8, 4, 3, PAL.black);
+  drawRect(c.x + 6, c.y + 3, 8, 6, PAL.cyan);
+  drawRect(c.x + 20, c.y + 3, 8, 6, PAL.cyan);
+  drawRect(c.x + 3, c.y + 12, 6, 5, PAL.black);
+  drawRect(c.x + 26, c.y + 12, 6, 5, PAL.black);
+}
+
+function drawPianoKeys() {
+  // Single continuous piano-key crosswalk band
+  const y = piano.y;
+  const h = piano.h;
+
+  // Base white band
+  drawRect(0, y, W, h, PAL.keyW);
+
+  // Draw alternating white keys with black key overlays (classic piano look)
+  const whiteW = 22;
+  let x = 0;
+  let i = 0;
+  while (x < W) {
+    // thin separator between white keys
+    drawRect(x + whiteW - 1, y, 2, h, '#c8c0a8');
+
+    // black keys (shorter, centered on the gaps) — every key except edges sometimes
+    if (i % 7 !== 2 && i % 7 !== 6) { // skip typical piano black-key pattern gaps
+      const bx = x + whiteW - 7;
+      drawRect(bx, y, 12, Math.floor(h * 0.62), PAL.keyB);
+    }
+    x += whiteW;
+    i++;
+  }
+
+  // Top & bottom edge lines for definition
+  drawRect(0, y, W, 2, '#d0c8b0');
+  drawRect(0, y + h - 2, W, 2, '#b0a890');
 }
 
 function draw() {
@@ -347,64 +453,59 @@ function draw() {
   drawRect(0, 0, W, H, PAL.dark);
 
   // Top sidewalk
-  drawRect(0, 0, W, 16, PAL.curb);
-  drawRect(0, 14, W, 2, PAL.light);
+  drawRect(0, 0, W, 32, PAL.curb);
+  drawRect(0, 30, W, 3, PAL.light);
 
-  // Road
-  drawRect(0, 16, W, 88, PAL.road);
+  // Road (full)
+  drawRect(0, 32, W, 176, PAL.road);
 
-  // Lane markings (dashed)
-  for (let y of [36, 52, 68, 84]) {
-    for (let x = 0; x < W; x += 16) {
-      drawRect(x, y, 8, 1, PAL.yellow);
+  // Faint lane lines only in blacktop zones (avoid piano band)
+  for (let ly of [55, 75, 160, 180]) {
+    for (let lx = 0; lx < W; lx += 20) {
+      drawRect(lx, ly, 10, 2, '#333');
     }
   }
 
-  // Piano keys (white platforms)
-  keys.forEach(k => {
-    drawRect(k.x, k.y, k.w, k.h, PAL.keyW);
-    // slight black key accent on top edge for piano feel
-    drawRect(k.x + 2, k.y, k.w - 4, 2, PAL.keyB);
-  });
+  // The single piano-key crosswalk (paint)
+  drawPianoKeys();
 
   // Bottom sidewalk
-  drawRect(0, 104, W, 16, PAL.curb);
-  drawRect(0, 104, W, 2, PAL.light);
+  drawRect(0, 208, W, 32, PAL.curb);
+  drawRect(0, 208, W, 3, PAL.light);
 
-  // Cars
+  // Cars (only on asphalt)
   cars.forEach(drawCar);
 
   // Player
   if (state !== 'menu') {
-    const walking = !player.onGround || Math.abs(player.vx) > 0.1 || Math.abs(player.vy) > 0.1;
-    drawMan(player.x, player.y, manColor, walking);
+    drawMan(player.x, player.y, manColor, manColor === 'red');
   }
 
-  // Overlay messages
+  // Menu overlay
   if (state === 'menu') {
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = PAL.yellow;
-    ctx.font = '8px "Press Start 2P"';
+    ctx.font = '16px "Press Start 2P"';
     ctx.textAlign = 'center';
-    ctx.fillText('XWALK', W/2, 40);
+    ctx.fillText('XWALK', W / 2, 70);
     ctx.fillStyle = PAL.white;
-    ctx.font = '5px "Press Start 2P"';
-    ctx.fillText('Hop the piano keys', W/2, 55);
-    ctx.fillText('Avoid blacktop & cars', W/2, 65);
-    ctx.fillText('60 seconds', W/2, 75);
+    ctx.font = '8px "Press Start 2P"';
+    ctx.fillText('Piano-key crosswalk', W / 2, 100);
+    ctx.fillText('Green hops • Red stands', W / 2, 118);
+    ctx.fillText('60 seconds', W / 2, 136);
   }
 
   if (state === 'dead' || state === 'win') {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 40, W, 40);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(0, 80, W, 80);
     ctx.fillStyle = state === 'win' ? PAL.green : PAL.red;
-    ctx.font = '7px "Press Start 2P"';
+    ctx.font = '14px "Press Start 2P"';
     ctx.textAlign = 'center';
-    ctx.fillText(state === 'win' ? 'SAFE!' : 'RUN OVER', W/2, 58);
+    ctx.fillText(state === 'win' ? 'SAFE!' : 'RUN OVER', W / 2, 115);
     ctx.fillStyle = PAL.white;
-    ctx.font = '4px "Press Start 2P"';
-    ctx.fillText('SPACE / ENTER to retry', W/2, 72);
+    ctx.font = '8px "Press Start 2P"';
+    ctx.fillText('TAP to retry', W / 2, 140);
   }
 }
 
@@ -414,26 +515,13 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   update(dt);
-  // Render at logical resolution then the CSS scales it
   ctx.save();
-  // We draw at 160×120 but canvas is 320×240, so scale
   ctx.scale(SCALE, SCALE);
   draw();
   ctx.restore();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
-
-// Touch / click support for mobile (simple hop forward)
-canvas.addEventListener('pointerdown', e => {
-  if (state === 'play' && player.hopCooldown <= 0) {
-    player.vy = -3.0;
-    player.hopCooldown = 12;
-    player.onGround = false;
-    lastMove = performance.now();
-    stillTimer = 0;
-  }
-});
 </script>
 </body>
 </html>
