@@ -136,9 +136,10 @@
 
 <script>
 // ============================================================
-// XWALK — Hold-to-charge hop, max 2 stripes
-// Red Man: hands on hips (two triangular spaces)
-// Larger cleaned pedestrian signal splash
+// XWALK
+// White stripes = safe
+// Black gaps = deadly → landing there instantly spawns a car hit
+// Cars only travel through black gaps
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -168,6 +169,8 @@ const PAL = {
 
 const STRIPE_W = 14;
 const MAX_STRIPES = 2;
+const ZEBRA_LEFT = 42;
+const ZEBRA_RIGHT = 318;
 
 let state = 'menu';
 let manColor = 'green';
@@ -184,6 +187,31 @@ let charging = false;
 let chargeStart = 0;
 let charge = 0;
 const MAX_CHARGE_MS = 700;
+
+// Returns true if this X is on a WHITE stripe (safe paint)
+function isWhiteStripe(px) {
+  if (px < ZEBRA_LEFT || px > ZEBRA_RIGHT) return false;
+  const local = px - ZEBRA_LEFT;
+  const index = Math.floor(local / STRIPE_W);
+  return (index % 2) === 0; // even indices = white
+}
+
+// Returns true if this X is on a BLACK gap (deadly)
+function isBlackGap(px) {
+  if (px < ZEBRA_LEFT || px > ZEBRA_RIGHT) return false;
+  return !isWhiteStripe(px);
+}
+
+// List of black-gap center X positions for car lanes
+function getBlackGapCenters() {
+  const centers = [];
+  let x = ZEBRA_LEFT + STRIPE_W; // first black starts after first white
+  while (x + STRIPE_W / 2 < ZEBRA_RIGHT) {
+    centers.push(x + STRIPE_W / 2);
+    x += STRIPE_W * 2;
+  }
+  return centers;
+}
 
 function resetGame(color) {
   manColor = color;
@@ -281,16 +309,42 @@ function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+// Safe = sidewalks OR white stripe within the zebra band
 function isOnSafe(px, py) {
-  if (px < 42) return true;
-  if (px > 318) return true;
-  if (py >= ZEBRA.y && py <= ZEBRA.y + ZEBRA.h + 6) return true;
+  if (px < ZEBRA_LEFT) return true;          // left sidewalk
+  if (px > ZEBRA_RIGHT) return true;         // right sidewalk
+  // Inside zebra Y band?
+  if (py >= ZEBRA.y && py <= ZEBRA.y + ZEBRA.h + 6) {
+    return isWhiteStripe(px);
+  }
   return false;
 }
 
+// Instantly kill player with a car when they land on black
+function triggerCarHit(px) {
+  // Spawn a car right on the player in that black gap
+  cars.push({
+    x: px - 9,
+    y: player.y - 30,
+    w: 18,
+    h: 28,
+    vx: 0,
+    vy: 6,
+    color: PAL.red,
+    deadly: true
+  });
+  state = 'dead';
+  document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
+  document.getElementById('touch-controls').style.display = 'none';
+  charging = false;
+}
+
 function spawnCar() {
+  // Only travel through BLACK gaps
+  const gaps = getBlackGapCenters();
+  if (gaps.length === 0) return;
+  const laneX = gaps[Math.floor(Math.random() * gaps.length)] - 9;
   const fromTop = Math.random() < 0.5;
-  const laneX = 55 + Math.floor(Math.random() * 10) * 26;
 
   cars.push({
     x: laneX,
@@ -344,33 +398,40 @@ function update(dt) {
 
     player.vx *= 0.98;
 
-    if (player.vy > 0 && isOnSafe(player.x, player.y)) {
-      if (player.x > 42 && player.x < 318) {
-        player.y = ZEBRA.y + 18;
-      } else {
+    // Landing logic
+    if (player.vy > 0) {
+      // Inside zebra band?
+      if (player.y >= ZEBRA.y && player.y <= ZEBRA.y + ZEBRA.h + 8) {
+        if (isWhiteStripe(player.x)) {
+          // Safe white paint
+          player.y = ZEBRA.y + 18;
+          player.vy = 0;
+          player.vx = 0;
+          player.onGround = true;
+        } else if (player.x > ZEBRA_LEFT && player.x < ZEBRA_RIGHT) {
+          // Landed on BLACK gap → immediate car hit
+          triggerCarHit(player.x);
+          return;
+        }
+      } else if (player.x < ZEBRA_LEFT || player.x > ZEBRA_RIGHT) {
+        // Sidewalk landing
         player.y = 148;
+        player.vy = 0;
+        player.vx = 0;
+        player.onGround = true;
+      } else if (player.y > ZEBRA.y + ZEBRA.h + 10) {
+        // Fell below the band onto road
+        triggerCarHit(player.x);
+        return;
       }
-      player.vy = 0;
-      player.vx = 0;
-      player.onGround = true;
-    }
-
-    if (player.vy > 0 && player.y > ZEBRA.y + ZEBRA.h + 8 && player.x > 42 && player.x < 318) {
-      state = 'dead';
-      document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
-      document.getElementById('touch-controls').style.display = 'none';
-      charging = false;
-      return;
     }
 
     player.x = Math.max(14, Math.min(346, player.x));
     player.y = Math.max(50, Math.min(180, player.y));
 
+    // Settled but somehow not safe
     if (player.onGround && !isOnSafe(player.x, player.y)) {
-      state = 'dead';
-      document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
-      document.getElementById('touch-controls').style.display = 'none';
-      charging = false;
+      triggerCarHit(player.x);
       return;
     }
   }
@@ -385,7 +446,7 @@ function update(dt) {
       continue;
     }
 
-    if (manColor === 'green') {
+    if (manColor === 'green' && state === 'play') {
       const pbox = { x: player.x - 8, y: player.y - 18, w: 16, h: 22 };
       if (rectsOverlap(pbox, c)) {
         state = 'dead';
@@ -412,26 +473,22 @@ function drawRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
-// Red Man: hands on hips / arms folded to waist
-// Creates two clear triangular negative spaces under the arms
 function drawRedMan(x, y, scale) {
   const s = scale || 1;
   const c = PAL.red;
   const r = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // head
-  r(-5, -20, 10, 8);
-  // torso
-  r(-4, -12, 8, 12);
-  // left arm (hands on hip) — creates left triangle of space
-  r(-12, -10, 8, 4);   // upper arm out
-  r(-12, -6, 4, 8);    // forearm down to hip
-  r(-10, 0, 5, 3);     // hand on hip
-  // right arm (mirror)
+  r(-5, -20, 10, 8);   // head
+  r(-4, -12, 8, 12);   // torso
+  // left arm → hip (triangle space)
+  r(-12, -10, 8, 4);
+  r(-12, -6, 4, 8);
+  r(-10, 0, 5, 3);
+  // right arm → hip
   r(4, -10, 8, 4);
   r(8, -6, 4, 8);
   r(5, 0, 5, 3);
-  // legs together
+  // legs
   r(-3, 0, 3, 9);
   r(1, 0, 3, 9);
 }
@@ -441,9 +498,7 @@ function drawGreenMan(x, y, scale, walking) {
   const c = PAL.green;
   const r = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // head
   r(-4, -20, 11, 9);
-  // body
   r(-3, -11, 9, 11);
   if (walking) {
     r(5, -9, 8, 5);
@@ -480,39 +535,34 @@ function drawCar(c) {
 function drawZebra() {
   const y = ZEBRA.y;
   const h = ZEBRA.h;
-  let x = 42;
+  let x = ZEBRA_LEFT;
   let light = true;
-  while (x < 318) {
-    if (light) drawRect(x, y, STRIPE_W, h, PAL.stripe);
+  while (x < ZEBRA_RIGHT) {
+    if (light) {
+      drawRect(x, y, STRIPE_W, h, PAL.stripe);
+    }
+    // black gaps are just the road showing through
     x += STRIPE_W;
     light = !light;
   }
-  drawRect(42, y, 276, 1, '#d0c8b0');
-  drawRect(42, y + h - 1, 276, 1, '#b0a890');
+  drawRect(ZEBRA_LEFT, y, ZEBRA_RIGHT - ZEBRA_LEFT, 1, '#d0c8b0');
+  drawRect(ZEBRA_LEFT, y + h - 1, ZEBRA_RIGHT - ZEBRA_LEFT, 1, '#b0a890');
 }
 
-// Larger, cleaner pedestrian traffic signal (2× previous)
 function drawPedSignal(cx, cy) {
-  // Outer housing
   drawRect(cx - 36, cy - 72, 72, 148, '#2a2a2a');
   drawRect(cx - 32, cy - 68, 64, 140, '#111');
 
-  // Top lens background (red)
   drawRect(cx - 26, cy - 62, 52, 56, '#1a0000');
   drawRect(cx - 24, cy - 60, 48, 52, '#330000');
-  // Red man (scaled up)
   drawRedMan(cx, cy - 36, 1.6);
 
-  // Divider
   drawRect(cx - 32, cy - 4, 64, 4, '#333');
 
-  // Bottom lens background (green)
   drawRect(cx - 26, cy + 4, 52, 56, '#001a00');
   drawRect(cx - 24, cy + 6, 48, 52, '#003300');
-  // Green man (scaled up, standing pose)
   drawGreenMan(cx, cy + 30, 1.6, false);
 
-  // Visor / rim details
   drawRect(cx - 32, cy - 68, 64, 3, '#444');
   drawRect(cx - 32, cy - 6, 64, 3, '#444');
   drawRect(cx - 32, cy + 60, 64, 3, '#444');
@@ -560,7 +610,6 @@ function draw() {
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
     ctx.fillRect(0, 0, W, H);
 
-    // Large clean pedestrian signal
     drawPedSignal(W / 2, 70);
 
     ctx.fillStyle = PAL.yellow;
