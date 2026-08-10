@@ -137,8 +137,8 @@
 <script>
 // ============================================================
 // XWALK — Hold-to-charge hop, max 2 stripes
-// Cars run perpendicular (vertical) across the zebra
-// Splash = pedestrian traffic signal with Red & Green man
+// Red Man: hands on hips (two triangular spaces)
+// Larger cleaned pedestrian signal splash
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -166,8 +166,8 @@ const PAL = {
   sky:   '#2a2a4a',
 };
 
-const STRIPE_W = 14;          // width of one zebra stripe
-const MAX_STRIPES = 2;        // cannot jump more than 2 spaces
+const STRIPE_W = 14;
+const MAX_STRIPES = 2;
 
 let state = 'menu';
 let manColor = 'green';
@@ -207,7 +207,7 @@ function resetGame(color) {
     tc.style.display = 'flex';
   } else {
     tc.style.display = 'none';
-    document.getElementById('msg').textContent = 'RED MAN stands akimbo…';
+    document.getElementById('msg').textContent = 'RED MAN stands still…';
   }
 }
 
@@ -238,10 +238,9 @@ function endCharge(e) {
     return;
   }
 
-  // Power 0..1, but hard-capped so max jump ≈ 2 stripe widths
   const power = Math.max(0.2, Math.min(1, charge));
-  const maxDist = STRIPE_W * MAX_STRIPES;          // 28 px
-  const hopRight = 4 + power * (maxDist - 4);      // 4 .. 28
+  const maxDist = STRIPE_W * MAX_STRIPES;
+  const hopRight = 4 + power * (maxDist - 4);
   const hopUp   = 1.8 + power * 2.4;
 
   player.vx = hopRight;
@@ -290,9 +289,7 @@ function isOnSafe(px, py) {
 }
 
 function spawnCar() {
-  // Cars travel VERTICALLY (perpendicular to the horizontal zebra)
   const fromTop = Math.random() < 0.5;
-  // Several horizontal lanes across the road
   const laneX = 55 + Math.floor(Math.random() * 10) * 26;
 
   cars.push({
@@ -415,42 +412,62 @@ function drawRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
-function drawMan(x, y, color, isRed) {
-  const c = color === 'red' ? PAL.red : PAL.green;
+// Red Man: hands on hips / arms folded to waist
+// Creates two clear triangular negative spaces under the arms
+function drawRedMan(x, y, scale) {
+  const s = scale || 1;
+  const c = PAL.red;
+  const r = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
+  // head
+  r(-5, -20, 10, 8);
+  // torso
+  r(-4, -12, 8, 12);
+  // left arm (hands on hip) — creates left triangle of space
+  r(-12, -10, 8, 4);   // upper arm out
+  r(-12, -6, 4, 8);    // forearm down to hip
+  r(-10, 0, 5, 3);     // hand on hip
+  // right arm (mirror)
+  r(4, -10, 8, 4);
+  r(8, -6, 4, 8);
+  r(5, 0, 5, 3);
+  // legs together
+  r(-3, 0, 3, 9);
+  r(1, 0, 3, 9);
+}
+
+function drawGreenMan(x, y, scale, walking) {
+  const s = scale || 1;
+  const c = PAL.green;
+  const r = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
+
+  // head
+  r(-4, -20, 11, 9);
+  // body
+  r(-3, -11, 9, 11);
+  if (walking) {
+    r(5, -9, 8, 5);
+    r(-7, -7, 5, 5);
+    r(-2, 0, 5, 8);
+    r(4, 2, 5, 7);
+  } else {
+    r(4, -8, 7, 5);
+    r(-6, -9, 5, 5);
+    r(-3, 1, 5, 7);
+    r(3, 0, 5, 8);
+  }
+}
+
+function drawMan(x, y, color, isRed) {
   if (isRed) {
-    // Akimbo
-    drawRect(x - 6, y - 20, 12, 9, c);
-    drawRect(x - 5, y - 11, 10, 11, c);
-    drawRect(x - 16, y - 9, 11, 6, c);
-    drawRect(x + 5, y - 9, 11, 6, c);
-    drawRect(x - 18, y - 8, 3, 4, c);
-    drawRect(x + 15, y - 8, 3, 4, c);
-    drawRect(x - 4, y, 4, 9, c);
-    drawRect(x + 1, y, 4, 9, c);
+    drawRedMan(x, y, 1);
   } else {
     const walk = !player.onGround || (frame >> 2) % 2;
-    drawRect(x - 4, y - 20, 11, 9, c);
-    drawRect(x - 3, y - 11, 9, 11, c);
-    if (walk) {
-      drawRect(x + 5, y - 9, 8, 5, c);
-      drawRect(x - 7, y - 7, 5, 5, c);
-    } else {
-      drawRect(x + 4, y - 8, 7, 5, c);
-      drawRect(x - 6, y - 9, 5, 5, c);
-    }
-    if (walk) {
-      drawRect(x - 2, y, 5, 8, c);
-      drawRect(x + 4, y + 2, 5, 7, c);
-    } else {
-      drawRect(x - 3, y + 1, 5, 7, c);
-      drawRect(x + 3, y, 5, 8, c);
-    }
+    drawGreenMan(x, y, 1, walk);
   }
 }
 
 function drawCar(c) {
-  // Vertical-oriented car (taller than wide)
   drawRect(c.x, c.y, c.w, c.h, c.color);
   drawRect(c.x + 3, c.y + 4, 12, 6, PAL.cyan);
   drawRect(c.x + 3, c.y + 14, 12, 6, PAL.cyan);
@@ -474,20 +491,31 @@ function drawZebra() {
   drawRect(42, y + h - 1, 276, 1, '#b0a890');
 }
 
-// Pedestrian traffic signal for splash (Red on top, Green on bottom)
+// Larger, cleaner pedestrian traffic signal (2× previous)
 function drawPedSignal(cx, cy) {
-  // housing
-  drawRect(cx - 18, cy - 38, 36, 76, '#222');
-  drawRect(cx - 16, cy - 36, 32, 72, '#111');
-  // top lens (red man)
-  drawRect(cx - 12, cy - 32, 24, 28, '#330000');
-  drawMan(cx, cy - 18, 'red', true);
-  // bottom lens (green man)
-  drawRect(cx - 12, cy + 2, 24, 28, '#003300');
-  drawMan(cx, cy + 16, 'green', false);
-  // little visor lines
-  drawRect(cx - 16, cy - 36, 32, 2, '#444');
-  drawRect(cx - 16, cy - 2, 32, 2, '#444');
+  // Outer housing
+  drawRect(cx - 36, cy - 72, 72, 148, '#2a2a2a');
+  drawRect(cx - 32, cy - 68, 64, 140, '#111');
+
+  // Top lens background (red)
+  drawRect(cx - 26, cy - 62, 52, 56, '#1a0000');
+  drawRect(cx - 24, cy - 60, 48, 52, '#330000');
+  // Red man (scaled up)
+  drawRedMan(cx, cy - 36, 1.6);
+
+  // Divider
+  drawRect(cx - 32, cy - 4, 64, 4, '#333');
+
+  // Bottom lens background (green)
+  drawRect(cx - 26, cy + 4, 52, 56, '#001a00');
+  drawRect(cx - 24, cy + 6, 48, 52, '#003300');
+  // Green man (scaled up, standing pose)
+  drawGreenMan(cx, cy + 30, 1.6, false);
+
+  // Visor / rim details
+  drawRect(cx - 32, cy - 68, 64, 3, '#444');
+  drawRect(cx - 32, cy - 6, 64, 3, '#444');
+  drawRect(cx - 32, cy + 60, 64, 3, '#444');
 }
 
 function draw() {
@@ -529,21 +557,20 @@ function draw() {
   }
 
   if (state === 'menu') {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
     ctx.fillRect(0, 0, W, H);
 
-    // Pedestrian signal
-    drawPedSignal(W / 2, 78);
+    // Large clean pedestrian signal
+    drawPedSignal(W / 2, 70);
 
     ctx.fillStyle = PAL.yellow;
     ctx.font = '16px "Press Start 2P"';
     ctx.textAlign = 'center';
-    ctx.fillText('XWALK', W / 2, 145);
+    ctx.fillText('XWALK', W / 2, 168);
 
     ctx.fillStyle = PAL.white;
     ctx.font = '7px "Press Start 2P"';
-    ctx.fillText('Hold to charge hop', W / 2, 165);
-    ctx.fillText('Max 2 stripes  •  Land on paint', W / 2, 178);
+    ctx.fillText('Hold to charge hop', W / 2, 185);
   }
 
   if (state === 'dead' || state === 'win') {
