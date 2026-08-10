@@ -136,10 +136,7 @@
 
 <script>
 // ============================================================
-// XWALK
-// White stripes = safe
-// Black gaps = deadly → landing there instantly spawns a car hit
-// Cars only travel through black gaps
+// XWALK — Classic Ampelmännchen sprites (hat + iconic poses)
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -155,8 +152,8 @@ const PAL = {
   gray:  '#555555',
   light: '#aaaaaa',
   white: '#eeeeee',
-  red:   '#cc0000',
-  green: '#00aa00',
+  red:   '#e01010',
+  green: '#10c060',
   yellow:'#ffcc00',
   blue:  '#2244aa',
   cyan:  '#44aaaa',
@@ -188,24 +185,16 @@ let chargeStart = 0;
 let charge = 0;
 const MAX_CHARGE_MS = 700;
 
-// Returns true if this X is on a WHITE stripe (safe paint)
 function isWhiteStripe(px) {
   if (px < ZEBRA_LEFT || px > ZEBRA_RIGHT) return false;
   const local = px - ZEBRA_LEFT;
   const index = Math.floor(local / STRIPE_W);
-  return (index % 2) === 0; // even indices = white
+  return (index % 2) === 0;
 }
 
-// Returns true if this X is on a BLACK gap (deadly)
-function isBlackGap(px) {
-  if (px < ZEBRA_LEFT || px > ZEBRA_RIGHT) return false;
-  return !isWhiteStripe(px);
-}
-
-// List of black-gap center X positions for car lanes
 function getBlackGapCenters() {
   const centers = [];
-  let x = ZEBRA_LEFT + STRIPE_W; // first black starts after first white
+  let x = ZEBRA_LEFT + STRIPE_W;
   while (x + STRIPE_W / 2 < ZEBRA_RIGHT) {
     centers.push(x + STRIPE_W / 2);
     x += STRIPE_W * 2;
@@ -309,20 +298,16 @@ function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-// Safe = sidewalks OR white stripe within the zebra band
 function isOnSafe(px, py) {
-  if (px < ZEBRA_LEFT) return true;          // left sidewalk
-  if (px > ZEBRA_RIGHT) return true;         // right sidewalk
-  // Inside zebra Y band?
+  if (px < ZEBRA_LEFT) return true;
+  if (px > ZEBRA_RIGHT) return true;
   if (py >= ZEBRA.y && py <= ZEBRA.y + ZEBRA.h + 6) {
     return isWhiteStripe(px);
   }
   return false;
 }
 
-// Instantly kill player with a car when they land on black
 function triggerCarHit(px) {
-  // Spawn a car right on the player in that black gap
   cars.push({
     x: px - 9,
     y: player.y - 30,
@@ -330,8 +315,7 @@ function triggerCarHit(px) {
     h: 28,
     vx: 0,
     vy: 6,
-    color: PAL.red,
-    deadly: true
+    color: PAL.red
   });
   state = 'dead';
   document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
@@ -340,7 +324,6 @@ function triggerCarHit(px) {
 }
 
 function spawnCar() {
-  // Only travel through BLACK gaps
   const gaps = getBlackGapCenters();
   if (gaps.length === 0) return;
   const laneX = gaps[Math.floor(Math.random() * gaps.length)] - 9;
@@ -392,35 +375,26 @@ function update(dt) {
     player.x += player.vx;
     player.y += player.vy;
 
-    if (!player.onGround) {
-      player.vy += 0.30;
-    }
-
+    if (!player.onGround) player.vy += 0.30;
     player.vx *= 0.98;
 
-    // Landing logic
     if (player.vy > 0) {
-      // Inside zebra band?
       if (player.y >= ZEBRA.y && player.y <= ZEBRA.y + ZEBRA.h + 8) {
         if (isWhiteStripe(player.x)) {
-          // Safe white paint
           player.y = ZEBRA.y + 18;
           player.vy = 0;
           player.vx = 0;
           player.onGround = true;
         } else if (player.x > ZEBRA_LEFT && player.x < ZEBRA_RIGHT) {
-          // Landed on BLACK gap → immediate car hit
           triggerCarHit(player.x);
           return;
         }
       } else if (player.x < ZEBRA_LEFT || player.x > ZEBRA_RIGHT) {
-        // Sidewalk landing
         player.y = 148;
         player.vy = 0;
         player.vx = 0;
         player.onGround = true;
       } else if (player.y > ZEBRA.y + ZEBRA.h + 10) {
-        // Fell below the band onto road
         triggerCarHit(player.x);
         return;
       }
@@ -429,7 +403,6 @@ function update(dt) {
     player.x = Math.max(14, Math.min(346, player.x));
     player.y = Math.max(50, Math.min(180, player.y));
 
-    // Settled but somehow not safe
     if (player.onGround && !isOnSafe(player.x, player.y)) {
       triggerCarHit(player.x);
       return;
@@ -440,12 +413,10 @@ function update(dt) {
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
     c.y += c.vy;
-
     if (c.y < 40 || c.y > 210) {
       cars.splice(i, 1);
       continue;
     }
-
     if (manColor === 'green' && state === 'play') {
       const pbox = { x: player.x - 8, y: player.y - 18, w: 16, h: 22 };
       if (rectsOverlap(pbox, c)) {
@@ -473,43 +444,67 @@ function drawRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
+// Classic Ampelmännchen Red — arms outstretched, peaked hat, solid body
 function drawRedMan(x, y, scale) {
   const s = scale || 1;
   const c = PAL.red;
   const r = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  r(-5, -20, 10, 8);   // head
-  r(-4, -12, 8, 12);   // torso
-  // left arm → hip (triangle space)
-  r(-12, -10, 8, 4);
-  r(-12, -6, 4, 8);
-  r(-10, 0, 5, 3);
-  // right arm → hip
-  r(4, -10, 8, 4);
-  r(8, -6, 4, 8);
-  r(5, 0, 5, 3);
-  // legs
-  r(-3, 0, 3, 9);
-  r(1, 0, 3, 9);
+  // peaked hat / brim
+  r(-9, -22, 18, 4);     // wide brim
+  r(-6, -26, 12, 5);     // crown
+  r(-7, -23, 2, 2);      // left peak hint
+  r(5, -23, 2, 2);       // right peak hint
+
+  // head
+  r(-5, -18, 10, 7);
+
+  // torso (slightly wider at bottom like the classic coat shape)
+  r(-6, -11, 12, 12);
+  r(-7, -2, 14, 5);
+
+  // arms fully out + rounded hands
+  r(-16, -9, 10, 5);     // left upper arm
+  r(-19, -8, 5, 5);      // left hand (blob)
+  r(6, -9, 10, 5);       // right upper arm
+  r(14, -8, 5, 5);       // right hand
+
+  // legs / base (together, classic pedestal look)
+  r(-5, 3, 4, 8);
+  r(1, 3, 4, 8);
+  r(-6, 10, 12, 3);      // feet / base
 }
 
+// Classic Ampelmännchen Green — walking stride, same hat
 function drawGreenMan(x, y, scale, walking) {
   const s = scale || 1;
   const c = PAL.green;
   const r = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  r(-4, -20, 11, 9);
-  r(-3, -11, 9, 11);
+  // peaked hat
+  r(-8, -23, 16, 4);
+  r(-5, -27, 11, 5);
+
+  // head
+  r(-4, -19, 10, 7);
+
+  // torso
+  r(-4, -12, 10, 11);
+
   if (walking) {
-    r(5, -9, 8, 5);
-    r(-7, -7, 5, 5);
-    r(-2, 0, 5, 8);
-    r(4, 2, 5, 7);
+    // striding pose
+    r(5, -10, 8, 5);      // front arm
+    r(-8, -8, 5, 5);      // back arm
+    r(-6, 0, 5, 6);       // back leg
+    r(2, 2, 6, 8);        // front leg extended
+    r(6, 9, 5, 3);        // front foot
   } else {
-    r(4, -8, 7, 5);
-    r(-6, -9, 5, 5);
-    r(-3, 1, 5, 7);
-    r(3, 0, 5, 8);
+    // standing / mid-step
+    r(4, -9, 7, 5);
+    r(-7, -8, 5, 5);
+    r(-4, 0, 4, 8);
+    r(2, 1, 5, 8);
+    r(-5, 8, 12, 3);
   }
 }
 
@@ -538,10 +533,7 @@ function drawZebra() {
   let x = ZEBRA_LEFT;
   let light = true;
   while (x < ZEBRA_RIGHT) {
-    if (light) {
-      drawRect(x, y, STRIPE_W, h, PAL.stripe);
-    }
-    // black gaps are just the road showing through
+    if (light) drawRect(x, y, STRIPE_W, h, PAL.stripe);
     x += STRIPE_W;
     light = !light;
   }
@@ -550,22 +542,27 @@ function drawZebra() {
 }
 
 function drawPedSignal(cx, cy) {
-  drawRect(cx - 36, cy - 72, 72, 148, '#2a2a2a');
-  drawRect(cx - 32, cy - 68, 64, 140, '#111');
+  // housing
+  drawRect(cx - 40, cy - 78, 80, 160, '#222');
+  drawRect(cx - 36, cy - 74, 72, 152, '#0a0a0a');
 
-  drawRect(cx - 26, cy - 62, 52, 56, '#1a0000');
-  drawRect(cx - 24, cy - 60, 48, 52, '#330000');
-  drawRedMan(cx, cy - 36, 1.6);
+  // top (red) lens
+  drawRect(cx - 30, cy - 68, 60, 64, '#1a0000');
+  drawRect(cx - 28, cy - 66, 56, 60, '#2a0000');
+  drawRedMan(cx, cy - 38, 1.7);
 
-  drawRect(cx - 32, cy - 4, 64, 4, '#333');
+  // divider
+  drawRect(cx - 36, cy - 2, 72, 5, '#333');
 
-  drawRect(cx - 26, cy + 4, 52, 56, '#001a00');
-  drawRect(cx - 24, cy + 6, 48, 52, '#003300');
-  drawGreenMan(cx, cy + 30, 1.6, false);
+  // bottom (green) lens
+  drawRect(cx - 30, cy + 6, 60, 64, '#001a08');
+  drawRect(cx - 28, cy + 8, 56, 60, '#002a10');
+  drawGreenMan(cx, cy + 36, 1.7, true);
 
-  drawRect(cx - 32, cy - 68, 64, 3, '#444');
-  drawRect(cx - 32, cy - 6, 64, 3, '#444');
-  drawRect(cx - 32, cy + 60, 64, 3, '#444');
+  // rims
+  drawRect(cx - 36, cy - 74, 72, 3, '#444');
+  drawRect(cx - 36, cy - 4, 72, 3, '#444');
+  drawRect(cx - 36, cy + 68, 72, 3, '#444');
 }
 
 function draw() {
@@ -593,7 +590,6 @@ function draw() {
   }
 
   drawZebra();
-
   cars.forEach(drawCar);
 
   if (state !== 'menu') {
@@ -602,24 +598,23 @@ function draw() {
 
   if (charging && manColor === 'green') {
     const barW = 28;
-    drawRect(player.x - barW/2, player.y - 30, barW, 4, '#111');
-    drawRect(player.x - barW/2, player.y - 30, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
+    drawRect(player.x - barW/2, player.y - 32, barW, 4, '#111');
+    drawRect(player.x - barW/2, player.y - 32, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
   }
 
   if (state === 'menu') {
-    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
     ctx.fillRect(0, 0, W, H);
-
-    drawPedSignal(W / 2, 70);
+    drawPedSignal(W / 2, 72);
 
     ctx.fillStyle = PAL.yellow;
     ctx.font = '16px "Press Start 2P"';
     ctx.textAlign = 'center';
-    ctx.fillText('XWALK', W / 2, 168);
+    ctx.fillText('XWALK', W / 2, 172);
 
     ctx.fillStyle = PAL.white;
     ctx.font = '7px "Press Start 2P"';
-    ctx.fillText('Hold to charge hop', W / 2, 185);
+    ctx.fillText('Hold to charge hop', W / 2, 188);
   }
 
   if (state === 'dead' || state === 'win') {
