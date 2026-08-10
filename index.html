@@ -123,7 +123,7 @@
       <button class="btn green" id="btn-green">GREEN MAN</button>
     </div>
     <div id="hud" style="display:none">
-      <span id="timer">60</span>s
+      <span id="timer">15</span>s
     </div>
   </div>
 
@@ -136,8 +136,9 @@
 
 <script>
 // ============================================================
-// XWALK — High-detail classic Ampelmännchen
-// Using as many pixels as needed for clear recognition
+// XWALK
+// Ampelmännchen redrawn from scratch to fit signal heads
+// Feet locked • half speed • 15s timer • max 3 paint blocks
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -166,13 +167,13 @@ const PAL = {
 };
 
 const STRIPE_W = 14;
-const MAX_STRIPES = 2;
+const MAX_STRIPES = 3;          // max 3 paint blocks
 const ZEBRA_LEFT = 42;
 const ZEBRA_RIGHT = 318;
 
 let state = 'menu';
 let manColor = 'green';
-let timer = 60;
+let timer = 15;
 let stillTimer = 0;
 let lastMove = 0;
 let frame = 0;
@@ -184,7 +185,7 @@ const ZEBRA = { y: 132, h: 28 };
 let charging = false;
 let chargeStart = 0;
 let charge = 0;
-const MAX_CHARGE_MS = 700;
+const MAX_CHARGE_MS = 900;      // slightly longer charge feel at half speed
 
 function isWhiteStripe(px) {
   if (px < ZEBRA_LEFT || px > ZEBRA_RIGHT) return false;
@@ -206,7 +207,7 @@ function getBlackGapCenters() {
 function resetGame(color) {
   manColor = color;
   state = 'play';
-  timer = 60;
+  timer = 15;
   stillTimer = 0;
   lastMove = performance.now();
   frame = 0;
@@ -257,14 +258,15 @@ function endCharge(e) {
   }
 
   const power = Math.max(0.2, Math.min(1, charge));
-  const maxDist = STRIPE_W * MAX_STRIPES;
-  const hopRight = 4 + power * (maxDist - 4);
-  const hopUp   = 1.8 + power * 2.4;
+  const maxDist = STRIPE_W * MAX_STRIPES;   // 3 stripes
+  // half the previous hop speeds
+  const hopRight = 2.2 + power * (maxDist * 0.55);
+  const hopUp   = 1.0 + power * 1.4;
 
   player.vx = hopRight;
   player.vy = -hopUp;
   player.onGround = false;
-  player.hopCooldown = 8;
+  player.hopCooldown = 16;   // longer cooldown at half speed
   lastMove = performance.now();
   stillTimer = 0;
 
@@ -315,7 +317,7 @@ function triggerCarHit(px) {
     w: 18,
     h: 28,
     vx: 0,
-    vy: 6,
+    vy: 3.5,          // half previous car slam speed
     color: PAL.red
   });
   state = 'dead';
@@ -336,7 +338,8 @@ function spawnCar() {
     w: 18,
     h: 28,
     vx: 0,
-    vy: fromTop ? (1.8 + Math.random() * 1.6) : -(1.8 + Math.random() * 1.6),
+    // half previous car speed
+    vy: fromTop ? (0.9 + Math.random() * 0.8) : -(0.9 + Math.random() * 0.8),
     color: Math.random() < 0.28 ? PAL.red : (Math.random() < 0.5 ? PAL.blue : PAL.orange)
   });
 }
@@ -363,7 +366,7 @@ function update(dt) {
 
   if (manColor === 'red') {
     stillTimer = (performance.now() - lastMove) / 1000;
-    if (stillTimer >= 60) {
+    if (stillTimer >= 15) {
       state = 'dead';
       document.getElementById('msg').textContent = 'RED MAN TIMED OUT';
       return;
@@ -376,8 +379,9 @@ function update(dt) {
     player.x += player.vx;
     player.y += player.vy;
 
-    if (!player.onGround) player.vy += 0.30;
-    player.vx *= 0.98;
+    // half gravity / drag feel
+    if (!player.onGround) player.vy += 0.15;
+    player.vx *= 0.99;
 
     if (player.vy > 0) {
       if (player.y >= ZEBRA.y && player.y <= ZEBRA.y + ZEBRA.h + 8) {
@@ -410,7 +414,8 @@ function update(dt) {
     }
   }
 
-  if (frame % 40 === 0) spawnCar();
+  // half spawn rate
+  if (frame % 80 === 0) spawnCar();
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
     c.y += c.vy;
@@ -419,7 +424,7 @@ function update(dt) {
       continue;
     }
     if (manColor === 'green' && state === 'play') {
-      const pbox = { x: player.x - 10, y: player.y - 22, w: 20, h: 26 };
+      const pbox = { x: player.x - 9, y: player.y - 20, w: 18, h: 24 };
       if (rectsOverlap(pbox, c)) {
         state = 'dead';
         document.getElementById('msg').textContent = 'HIT BY CAR — RUN OVER!';
@@ -446,8 +451,9 @@ function drawRect(x, y, w, h, color) {
 }
 
 // ============================================================
-// HIGH-DETAIL AMPELMÄNNCHEN
-// Drawn with many small pixels so the classic shapes read clearly
+// AMPELMÄNNCHEN REDRAWN FROM SCRATCH
+// Sized to fit cleanly inside the signal-head lenses
+// Feet are locked (no foot animation)
 // ============================================================
 
 function drawRedMan(x, y, scale) {
@@ -455,101 +461,66 @@ function drawRedMan(x, y, scale) {
   const c = PAL.red;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // === HAT (peaked / wide brim — the signature look) ===
-  // brim
-  p(-11, -26, 22, 3);
-  p(-10, -27, 20, 1);
-  // crown
-  p(-7, -31, 14, 5);
-  p(-6, -32, 12, 1);
-  // side peaks of the brim
-  p(-12, -25, 3, 2);
-  p(9, -25, 3, 2);
+  // Hat — wide brim + peaked crown (fits lens)
+  p(-8, -22, 16, 2);      // brim
+  p(-6, -25, 12, 4);      // crown
+  p(-7, -23, 2, 2);       // left peak tip
+  p(5, -23, 2, 2);        // right peak tip
 
-  // === HEAD ===
-  p(-6, -23, 12, 8);
-  p(-5, -24, 10, 1);
+  // Head
+  p(-5, -20, 10, 6);
 
-  // === TORSO (coat-like, slightly wider at bottom) ===
-  p(-7, -15, 14, 14);
-  p(-8, -4, 16, 6);
-  p(-7, 1, 14, 3);
+  // Body / coat
+  p(-6, -14, 12, 12);
+  p(-7, -4, 14, 5);
 
-  // === ARMS FULLY OUT (classic stop pose) ===
-  // left arm
-  p(-17, -12, 10, 4);
-  p(-19, -11, 4, 4);
-  // left hand (rounded)
-  p(-21, -10, 4, 4);
-  p(-22, -9, 2, 2);
-  // right arm
-  p(7, -12, 10, 4);
-  p(15, -11, 4, 4);
-  // right hand
-  p(17, -10, 4, 4);
-  p(20, -9, 2, 2);
+  // Arms straight out + rounded hands (classic stop)
+  p(-14, -11, 8, 3);
+  p(-16, -10, 4, 4);      // left hand
+  p(6, -11, 8, 3);
+  p(12, -10, 4, 4);       // right hand
 
-  // === LEGS + BASE (together, pedestal feel) ===
-  p(-5, 4, 4, 9);
-  p(1, 4, 4, 9);
-  p(-6, 12, 12, 3);
-  p(-5, 14, 10, 1);
+  // Legs locked together + solid base (feet do not move)
+  p(-4, 1, 3, 7);
+  p(1, 1, 3, 7);
+  p(-5, 7, 10, 2);        // fixed feet / base
 }
 
-function drawGreenMan(x, y, scale, walking) {
+function drawGreenMan(x, y, scale) {
+  // Static walking silhouette — feet locked, no leg animation
   const s = scale || 1;
   const c = PAL.green;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // === HAT ===
-  p(-10, -27, 20, 3);
-  p(-9, -28, 18, 1);
-  p(-6, -32, 13, 5);
-  p(-5, -33, 11, 1);
-  p(-11, -26, 3, 2);
-  p(8, -26, 3, 2);
+  // Hat
+  p(-7, -23, 15, 2);
+  p(-5, -26, 11, 4);
+  p(-6, -24, 2, 2);
+  p(4, -24, 2, 2);
 
-  // === HEAD ===
-  p(-5, -24, 12, 8);
-  p(-4, -25, 10, 1);
+  // Head
+  p(-4, -21, 10, 6);
 
-  // === TORSO ===
-  p(-6, -16, 13, 13);
+  // Body
+  p(-5, -15, 11, 11);
 
-  if (walking) {
-    // === STRIDING POSE (classic green Ampelmännchen) ===
-    // front arm reaching forward
-    p(6, -13, 9, 4);
-    p(13, -12, 4, 4);
-    p(15, -11, 3, 3);
-    // back arm
-    p(-10, -11, 5, 4);
-    p(-12, -10, 3, 3);
+  // Arms in classic stride pose (static)
+  p(5, -12, 7, 3);        // front arm
+  p(10, -11, 3, 3);
+  p(-9, -11, 5, 3);       // back arm
 
-    // back leg
-    p(-7, -2, 5, 8);
-    p(-8, 5, 4, 4);
-    // front leg extended
-    p(2, 0, 6, 10);
-    p(5, 9, 5, 4);
-    p(8, 12, 4, 2);
-  } else {
-    // standing / mid-step
-    p(5, -12, 8, 4);
-    p(11, -11, 4, 3);
-    p(-9, -11, 5, 4);
-    p(-5, -2, 5, 10);
-    p(2, 0, 5, 10);
-    p(-6, 10, 13, 3);
-  }
+  // Legs in fixed stride — feet locked in place
+  p(-5, -3, 4, 7);        // back leg
+  p(2, -1, 5, 8);         // front leg
+  p(-6, 4, 4, 2);         // back foot (fixed)
+  p(5, 6, 4, 2);          // front foot (fixed)
 }
 
 function drawMan(x, y, color, isRed) {
   if (isRed) {
     drawRedMan(x, y, 1);
   } else {
-    const walk = !player.onGround || (frame >> 2) % 2;
-    drawGreenMan(x, y, 1, walk);
+    drawGreenMan(x, y, 1);   // no walking frame toggle — feet never move
   }
 }
 
@@ -578,27 +549,27 @@ function drawZebra() {
 }
 
 function drawPedSignal(cx, cy) {
-  // larger housing for the detailed figures
-  drawRect(cx - 44, cy - 84, 88, 172, '#222');
-  drawRect(cx - 40, cy - 80, 80, 164, '#0a0a0a');
+  // Signal housing sized so figures sit cleanly inside each lens
+  drawRect(cx - 36, cy - 70, 72, 144, '#222');
+  drawRect(cx - 32, cy - 66, 64, 136, '#0a0a0a');
 
-  // red lens
-  drawRect(cx - 34, cy - 74, 68, 70, '#1a0000');
-  drawRect(cx - 32, cy - 72, 64, 66, '#2a0000');
-  drawRedMan(cx, cy - 42, 1.9);
+  // Red lens
+  drawRect(cx - 26, cy - 60, 52, 56, '#1a0000');
+  drawRect(cx - 24, cy - 58, 48, 52, '#2a0000');
+  drawRedMan(cx, cy - 34, 1.55);
 
-  // divider
-  drawRect(cx - 40, cy - 2, 80, 5, '#333');
+  // Divider
+  drawRect(cx - 32, cy - 2, 64, 4, '#333');
 
-  // green lens
-  drawRect(cx - 34, cy + 6, 68, 70, '#001a08');
-  drawRect(cx - 32, cy + 8, 64, 66, '#002a10');
-  drawGreenMan(cx, cy + 40, 1.9, true);
+  // Green lens
+  drawRect(cx - 26, cy + 4, 52, 56, '#001a08');
+  drawRect(cx - 24, cy + 6, 48, 52, '#002a10');
+  drawGreenMan(cx, cy + 30, 1.55);
 
-  // rims
-  drawRect(cx - 40, cy - 80, 80, 3, '#444');
-  drawRect(cx - 40, cy - 4, 80, 3, '#444');
-  drawRect(cx - 40, cy + 74, 80, 3, '#444');
+  // Rims
+  drawRect(cx - 32, cy - 66, 64, 2, '#444');
+  drawRect(cx - 32, cy - 4, 64, 2, '#444');
+  drawRect(cx - 32, cy + 58, 64, 2, '#444');
 }
 
 function draw() {
@@ -634,23 +605,23 @@ function draw() {
 
   if (charging && manColor === 'green') {
     const barW = 28;
-    drawRect(player.x - barW/2, player.y - 36, barW, 4, '#111');
-    drawRect(player.x - barW/2, player.y - 36, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
+    drawRect(player.x - barW/2, player.y - 32, barW, 4, '#111');
+    drawRect(player.x - barW/2, player.y - 32, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
   }
 
   if (state === 'menu') {
     ctx.fillStyle = 'rgba(0,0,0,0.78)';
     ctx.fillRect(0, 0, W, H);
-    drawPedSignal(W / 2, 70);
+    drawPedSignal(W / 2, 72);
 
     ctx.fillStyle = PAL.yellow;
     ctx.font = '16px "Press Start 2P"';
     ctx.textAlign = 'center';
-    ctx.fillText('XWALK', W / 2, 172);
+    ctx.fillText('XWALK', W / 2, 168);
 
     ctx.fillStyle = PAL.white;
     ctx.font = '7px "Press Start 2P"';
-    ctx.fillText('Hold to charge hop', W / 2, 188);
+    ctx.fillText('Hold to charge hop', W / 2, 185);
   }
 
   if (state === 'dead' || state === 'win') {
