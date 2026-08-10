@@ -73,35 +73,42 @@
     display: none;
     width: 100%;
     max-width: 720px;
-    margin-top: 8px;
-    gap: 14px;
+    margin-top: 10px;
     justify-content: center;
-    align-items: center;
   }
-  .tbtn {
-    width: 76px;
-    height: 76px;
-    background: #222;
-    border: 4px solid #555;
-    color: #fff;
-    font-size: 30px;
+  #hold-btn {
+    width: 200px;
+    height: 88px;
+    background: #1a3a1a;
+    border: 5px solid #0a0;
+    color: #6f6;
     font-family: inherit;
+    font-size: 14px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     user-select: none;
-    border-radius: 10px;
+    border-radius: 12px;
+    gap: 4px;
   }
-  .tbtn:active, .tbtn.active {
-    background: #333;
+  #hold-btn:active, #hold-btn.holding {
+    background: #2a5a2a;
     border-color: #ffcc00;
     color: #ffcc00;
   }
-  .tbtn.fwd {
-    width: 96px;
-    height: 96px;
-    font-size: 34px;
-    border-color: #0a0;
+  #charge-bar {
+    width: 160px;
+    height: 10px;
+    background: #111;
+    border: 2px solid #444;
+    margin-top: 2px;
+  }
+  #charge-fill {
+    height: 100%;
+    width: 0%;
+    background: #0a0;
+    transition: none;
   }
 </style>
 </head>
@@ -122,16 +129,16 @@
   </div>
 
   <div id="touch-controls">
-    <button class="tbtn" id="t-left">◀</button>
-    <button class="tbtn fwd" id="t-fwd">▶</button>
-    <button class="tbtn" id="t-right">▶▶</button>
+    <button id="hold-btn">
+      <span>HOLD TO HOP</span>
+      <div id="charge-bar"><div id="charge-fill"></div></div>
+    </button>
   </div>
 
 <script>
 // ============================================================
-// XWALK — Side-scroller Ampelmännchen
-// Left → Right zebra crosswalk (classic stripes)
-// Red Man locked akimbo • Touch-first
+// XWALK — Single hold-to-charge hop
+// Hold longer = longer jump. Land on zebra paint or die.
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -155,7 +162,7 @@ const PAL = {
   orange:'#cc6600',
   road:  '#1c1c1c',
   curb:  '#5a5a5a',
-  stripe:'#e8e0c8',  // zebra stripe color
+  stripe:'#e8e0c8',
   sky:   '#2a2a4a',
 };
 
@@ -168,11 +175,13 @@ let frame = 0;
 let cars = [];
 let player = { x: 28, y: 148, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
 
-// Classic zebra crosswalk band (horizontal stripes)
-const ZEBRA = {
-  y: 132,
-  h: 28,
-};
+const ZEBRA = { y: 132, h: 28 };
+
+// Charge system
+let charging = false;
+let chargeStart = 0;
+let charge = 0;          // 0..1
+const MAX_CHARGE_MS = 900;
 
 function resetGame(color) {
   manColor = color;
@@ -183,6 +192,9 @@ function resetGame(color) {
   frame = 0;
   cars = [];
   player = { x: 28, y: 148, vx: 0, vy: 0, onGround: true, hopCooldown: 0 };
+  charging = false;
+  charge = 0;
+  updateChargeBar();
 
   document.getElementById('menu').style.display = 'none';
   document.getElementById('hud').style.display = 'block';
@@ -197,32 +209,60 @@ function resetGame(color) {
   }
 }
 
-function doHop(dx, dy) {
-  if (state !== 'play' || manColor !== 'green' || player.hopCooldown > 0) return;
-  player.vx = dx;
-  player.vy = dy;
-  player.hopCooldown = 13;
-  player.onGround = false;
-  lastMove = performance.now();
-  stillTimer = 0;
+function updateChargeBar() {
+  const fill = document.getElementById('charge-fill');
+  fill.style.width = (charge * 100) + '%';
+  fill.style.background = charge > 0.75 ? '#ffcc00' : '#0a0';
 }
 
-document.getElementById('t-left').addEventListener('pointerdown', e => {
-  e.preventDefault();
-  doHop(-3.8, -2.2);
-});
-document.getElementById('t-fwd').addEventListener('pointerdown', e => {
-  e.preventDefault();
-  doHop(5.2, -2.8);
-});
-document.getElementById('t-right').addEventListener('pointerdown', e => {
-  e.preventDefault();
-  doHop(7.0, -1.5);
-});
+function startCharge(e) {
+  if (e) e.preventDefault();
+  if (state !== 'play' || manColor !== 'green' || !player.onGround || player.hopCooldown > 0) return;
+  charging = true;
+  chargeStart = performance.now();
+  charge = 0;
+  document.getElementById('hold-btn').classList.add('holding');
+}
 
+function endCharge(e) {
+  if (e) e.preventDefault();
+  if (!charging) return;
+  charging = false;
+  document.getElementById('hold-btn').classList.remove('holding');
+
+  if (state !== 'play' || manColor !== 'green' || !player.onGround) {
+    charge = 0;
+    updateChargeBar();
+    return;
+  }
+
+  // Power based on hold time (min small hop, max long hop)
+  const power = Math.max(0.18, Math.min(1, charge));
+  const hopRight = 3.2 + power * 9.5;   // horizontal distance
+  const hopUp   = 2.0 + power * 3.8;    // vertical lift
+
+  player.vx = hopRight;
+  player.vy = -hopUp;
+  player.onGround = false;
+  player.hopCooldown = 8;
+  lastMove = performance.now();
+  stillTimer = 0;
+
+  charge = 0;
+  updateChargeBar();
+}
+
+// Button events
+const holdBtn = document.getElementById('hold-btn');
+holdBtn.addEventListener('pointerdown', startCharge);
+holdBtn.addEventListener('pointerup', endCharge);
+holdBtn.addEventListener('pointerleave', endCharge);
+holdBtn.addEventListener('pointercancel', endCharge);
+
+// Also allow holding on the canvas itself
 canvas.addEventListener('pointerdown', e => {
   if (state === 'play' && manColor === 'green') {
-    doHop(5.2, -2.8);
+    startCharge(e);
   } else if (state === 'dead' || state === 'win') {
     state = 'menu';
     document.getElementById('menu').style.display = 'block';
@@ -231,6 +271,8 @@ canvas.addEventListener('pointerdown', e => {
     document.getElementById('msg').textContent = 'Choose your man';
   }
 });
+canvas.addEventListener('pointerup', endCharge);
+canvas.addEventListener('pointercancel', endCharge);
 
 document.getElementById('btn-red').onclick = () => resetGame('red');
 document.getElementById('btn-green').onclick = () => resetGame('green');
@@ -240,9 +282,9 @@ function rectsOverlap(a, b) {
 }
 
 function isOnSafe(px, py) {
-  if (px < 42) return true;          // left sidewalk
-  if (px > 318) return true;         // right sidewalk
-  if (py >= ZEBRA.y && py <= ZEBRA.y + ZEBRA.h + 6) return true; // zebra band
+  if (px < 42) return true;
+  if (px > 318) return true;
+  if (py >= ZEBRA.y && py <= ZEBRA.y + ZEBRA.h + 6) return true;
   return false;
 }
 
@@ -265,12 +307,20 @@ function update(dt) {
   if (state !== 'play') return;
   frame++;
 
+  // Update charge while holding
+  if (charging) {
+    const held = performance.now() - chargeStart;
+    charge = Math.min(1, held / MAX_CHARGE_MS);
+    updateChargeBar();
+  }
+
   timer -= dt;
   if (timer <= 0) {
     timer = 0;
     state = 'dead';
     document.getElementById('msg').textContent = 'TIME UP — RUN OVER!';
     document.getElementById('touch-controls').style.display = 'none';
+    charging = false;
     return;
   }
 
@@ -290,12 +340,12 @@ function update(dt) {
     player.y += player.vy;
 
     if (!player.onGround) {
-      player.vy += 0.22;
+      player.vy += 0.28; // gravity
     }
 
-    player.vx *= 0.80;
-    if (Math.abs(player.vx) < 0.18) player.vx = 0;
+    player.vx *= 0.985; // slight air drag
 
+    // Landing
     if (player.vy > 0 && isOnSafe(player.x, player.y)) {
       if (player.x > 42 && player.x < 318) {
         player.y = ZEBRA.y + 18;
@@ -303,16 +353,28 @@ function update(dt) {
         player.y = 148;
       }
       player.vy = 0;
+      player.vx = 0;
       player.onGround = true;
     }
 
-    player.x = Math.max(14, Math.min(346, player.x));
-    player.y = Math.max(60, Math.min(175, player.y));
+    // Fell onto blacktop
+    if (player.vy > 0 && player.y > ZEBRA.y + ZEBRA.h + 8 && player.x > 42 && player.x < 318) {
+      state = 'dead';
+      document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
+      document.getElementById('touch-controls').style.display = 'none';
+      charging = false;
+      return;
+    }
 
+    player.x = Math.max(14, Math.min(346, player.x));
+    player.y = Math.max(50, Math.min(180, player.y));
+
+    // Final settle check
     if (player.onGround && !isOnSafe(player.x, player.y)) {
       state = 'dead';
       document.getElementById('msg').textContent = 'HIT BLACKTOP — RUN OVER!';
       document.getElementById('touch-controls').style.display = 'none';
+      charging = false;
       return;
     }
   }
@@ -322,7 +384,6 @@ function update(dt) {
     const c = cars[i];
     c.x += c.vx;
 
-    // keep cars off the zebra paint
     if (c.y + c.h > ZEBRA.y && c.y < ZEBRA.y + ZEBRA.h) {
       if (c.y < ZEBRA.y + ZEBRA.h / 2) c.y = ZEBRA.y - c.h - 3;
       else c.y = ZEBRA.y + ZEBRA.h + 3;
@@ -339,6 +400,7 @@ function update(dt) {
         state = 'dead';
         document.getElementById('msg').textContent = 'HIT BY CAR — RUN OVER!';
         document.getElementById('touch-controls').style.display = 'none';
+        charging = false;
         return;
       }
     }
@@ -348,6 +410,7 @@ function update(dt) {
     state = 'win';
     document.getElementById('msg').textContent = 'YOU CROSSED!';
     document.getElementById('touch-controls').style.display = 'none';
+    charging = false;
   }
 
   document.getElementById('timer').textContent = Math.ceil(timer);
@@ -362,7 +425,6 @@ function drawMan(x, y, color, isRed) {
   const c = color === 'red' ? PAL.red : PAL.green;
 
   if (isRed) {
-    // Classic front-facing akimbo
     drawRect(x - 6, y - 20, 12, 9, c);
     drawRect(x - 5, y - 11, 10, 11, c);
     drawRect(x - 16, y - 9, 11, 6, c);
@@ -372,8 +434,7 @@ function drawMan(x, y, color, isRed) {
     drawRect(x - 4, y, 4, 9, c);
     drawRect(x + 1, y, 4, 9, c);
   } else {
-    // Green — side-view hop facing right
-    const walk = (frame >> 2) % 2;
+    const walk = !player.onGround || (frame >> 2) % 2;
     drawRect(x - 4, y - 20, 11, 9, c);
     drawRect(x - 3, y - 11, 9, 11, c);
     if (walk) {
@@ -402,7 +463,6 @@ function drawCar(c) {
 }
 
 function drawZebra() {
-  // Classic zebra crossing: alternating light stripes across the road
   const y = ZEBRA.y;
   const h = ZEBRA.h;
   const stripeW = 14;
@@ -413,12 +473,9 @@ function drawZebra() {
     if (light) {
       drawRect(x, y, stripeW, h, PAL.stripe);
     }
-    // dark gaps are just the road showing through
     x += stripeW;
     light = !light;
   }
-
-  // subtle top/bottom edge
   drawRect(42, y, 276, 1, '#d0c8b0');
   drawRect(42, y + h - 1, 276, 1, '#b0a890');
 }
@@ -426,7 +483,6 @@ function drawZebra() {
 function draw() {
   drawRect(0, 0, W, H, PAL.sky);
 
-  // simple distant buildings
   drawRect(0, 40, W, 50, '#222233');
   for (let i = 0; i < 12; i++) {
     const bx = 10 + i * 30;
@@ -435,30 +491,33 @@ function draw() {
     drawRect(bx + 10, 34, 4, 4, '#445');
   }
 
-  // Road
   drawRect(0, 70, W, 130, PAL.road);
 
-  // Left sidewalk
   drawRect(0, 70, 42, 130, PAL.curb);
   drawRect(40, 70, 3, 130, PAL.light);
 
-  // Right sidewalk
   drawRect(318, 70, 42, 130, PAL.curb);
   drawRect(318, 70, 3, 130, PAL.light);
 
-  // faint road lines
   for (let lx = 50; lx < 310; lx += 28) {
     drawRect(lx, 100, 14, 2, '#333');
     drawRect(lx, 175, 14, 2, '#333');
   }
 
-  // Classic zebra crosswalk
   drawZebra();
 
   cars.forEach(drawCar);
 
   if (state !== 'menu') {
     drawMan(player.x, player.y, manColor, manColor === 'red');
+  }
+
+  // Charge indicator above player while holding
+  if (charging && manColor === 'green') {
+    const barW = 28;
+    const barH = 4;
+    drawRect(player.x - barW/2, player.y - 30, barW, barH, '#111');
+    drawRect(player.x - barW/2, player.y - 30, barW * charge, barH, charge > 0.75 ? PAL.yellow : PAL.green);
   }
 
   if (state === 'menu') {
@@ -470,8 +529,8 @@ function draw() {
     ctx.fillText('XWALK', W / 2, 55);
     ctx.fillStyle = PAL.white;
     ctx.font = '8px "Press Start 2P"';
-    ctx.fillText('Left → Right side-scroller', W / 2, 85);
-    ctx.fillText('Hop the zebra stripes', W / 2, 102);
+    ctx.fillText('Hold to charge hop', W / 2, 85);
+    ctx.fillText('Land on the stripes', W / 2, 102);
     ctx.fillText('Green hops  •  Red stands', W / 2, 119);
   }
 
