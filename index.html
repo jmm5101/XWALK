@@ -136,8 +136,7 @@
 
 <script>
 // ============================================================
-// XWALK
-// Max hop hard-capped at 3.5 paint blocks
+// XWALK — Classic Ampelmännchen sprites redesigned for ~80% resemblance
 // ============================================================
 
 const canvas = document.getElementById('c');
@@ -166,7 +165,7 @@ const PAL = {
 };
 
 const STRIPE_W = 14;
-const MAX_BLOCKS = 3.5;         // hard maximum hop distance in paint blocks
+const MAX_BLOCKS = 3.5;
 const ZEBRA_LEFT = 42;
 const ZEBRA_RIGHT = 318;
 
@@ -256,18 +255,13 @@ function endCharge(e) {
     return;
   }
 
-  // power 0.25 .. 1.0
   const power = Math.max(0.25, Math.min(1, charge));
-
-  // Hard distance cap: never more than 3.5 paint blocks
-  const maxTravel = STRIPE_W * MAX_BLOCKS;          // 49 px
-  const travel = maxTravel * power;                 // scaled by charge
+  const maxTravel = STRIPE_W * MAX_BLOCKS;
+  const travel = maxTravel * power;
 
   player.hopOriginX = player.x;
   player.hopMaxX = player.x + travel;
 
-  // Calibrated velocity + strong damping so total travel ≈ travel distance
-  // With vx *= 0.82 each frame, distance ≈ vx0 / 0.18
   player.vx = travel * 0.18;
   player.vy = -(1.2 + power * 1.6);
   player.onGround = false;
@@ -383,14 +377,13 @@ function update(dt) {
     player.x += player.vx;
     player.y += player.vy;
 
-    // Hard stop at hopMaxX so we never travel more than 3.5 blocks
     if (player.hopMaxX > 0 && player.x > player.hopMaxX) {
       player.x = player.hopMaxX;
       player.vx = 0;
     }
 
     if (!player.onGround) player.vy += 0.16;
-    player.vx *= 0.82;   // stronger damping for predictable short hops
+    player.vx *= 0.82;
 
     if (player.vy > 0) {
       if (player.y >= ZEBRA.y && player.y <= ZEBRA.y + ZEBRA.h + 8) {
@@ -460,53 +453,73 @@ function drawRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
+// ============================================================
+// REDESIGNED AMPELMÄNNCHEN SPRITES
+// Aimed at ~80% resemblance to the classic East German figures
+// while remaining clearly pixelated
+// ============================================================
+
 function drawRedMan(x, y, scale) {
   const s = scale || 1;
   const c = PAL.red;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  p(-8, -22, 16, 2);
-  p(-6, -25, 12, 4);
-  p(-7, -23, 2, 2);
-  p(5, -23, 2, 2);
+  // Classic wide flat-top hat with brim (signature Ampelmännchen look)
+  p(-9, -24, 18, 3);       // wide brim
+  p(-7, -28, 14, 5);       // flat crown
+  p(-8, -25, 2, 2);        // left brim tip
+  p(6, -25, 2, 2);         // right brim tip
 
-  p(-5, -20, 10, 6);
+  // Rounded head + slight chin
+  p(-6, -21, 12, 7);
+  p(-5, -22, 10, 1);
 
-  p(-6, -14, 12, 12);
-  p(-7, -4, 14, 5);
+  // Plump torso / coat body (wider lower half)
+  p(-7, -14, 14, 13);
+  p(-8, -3, 16, 6);
 
-  p(-14, -11, 8, 3);
-  p(-16, -10, 4, 4);
-  p(6, -11, 8, 3);
-  p(12, -10, 4, 4);
+  // Thick arms fully outstretched + rounded hands (classic stop pose)
+  p(-16, -11, 9, 4);       // left upper arm
+  p(-19, -10, 5, 5);       // left hand blob
+  p(7, -11, 9, 4);         // right upper arm
+  p(14, -10, 5, 5);        // right hand blob
 
-  p(-4, 1, 3, 7);
-  p(1, 1, 3, 7);
-  p(-5, 7, 10, 2);
+  // Short legs together + solid base (feet locked)
+  p(-5, 3, 4, 8);
+  p(1, 3, 4, 8);
+  p(-6, 10, 12, 3);        // pedestal feet
 }
 
 function drawGreenMan(x, y, scale) {
+  // Side / 3-quarter walking profile — clear hat, arms, and stride
   const s = scale || 1;
   const c = PAL.green;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  p(-7, -23, 15, 2);
-  p(-5, -26, 11, 4);
-  p(-6, -24, 2, 2);
-  p(4, -24, 2, 2);
+  // Same classic hat, slightly tilted by the walking angle
+  p(-8, -25, 16, 3);       // brim
+  p(-6, -29, 13, 5);       // crown
+  p(-7, -26, 2, 2);
+  p(5, -26, 2, 2);
 
-  p(-4, -21, 10, 6);
+  // Head in profile-ish orientation
+  p(-5, -22, 11, 7);
+  p(-4, -23, 9, 1);
 
-  p(-5, -15, 11, 11);
+  // Torso leaning slightly forward
+  p(-5, -15, 12, 12);
 
-  p(5, -12, 7, 3);
-  p(10, -11, 3, 3);
-  p(-9, -11, 5, 3);
+  // Walking arms: front arm reaching forward, back arm back
+  p(6, -12, 8, 4);         // front upper arm
+  p(12, -11, 4, 4);        // front hand
+  p(-10, -11, 6, 4);       // back arm
+  p(-12, -10, 3, 3);       // back hand
 
-  p(-5, -3, 4, 7);
-  p(2, -1, 5, 8);
-  p(-6, 4, 4, 2);
-  p(5, 6, 4, 2);
+  // Clear walking stride (feet locked in pose, no animation)
+  p(-6, -2, 5, 8);         // back leg
+  p(-7, 5, 4, 3);          // back foot
+  p(2, 0, 6, 9);           // front leg extended
+  p(5, 8, 5, 3);           // front foot
 }
 
 function drawMan(x, y, color, isRed) {
@@ -539,22 +552,24 @@ function drawZebra() {
 }
 
 function drawPedSignal(cx, cy) {
-  drawRect(cx - 36, cy - 70, 72, 144, '#222');
-  drawRect(cx - 32, cy - 66, 64, 136, '#0a0a0a');
+  drawRect(cx - 38, cy - 72, 76, 148, '#222');
+  drawRect(cx - 34, cy - 68, 68, 140, '#0a0a0a');
 
-  drawRect(cx - 26, cy - 60, 52, 56, '#1a0000');
-  drawRect(cx - 24, cy - 58, 48, 52, '#2a0000');
-  drawRedMan(cx, cy - 34, 1.55);
+  // Red lens
+  drawRect(cx - 28, cy - 62, 56, 58, '#1a0000');
+  drawRect(cx - 26, cy - 60, 52, 54, '#2a0000');
+  drawRedMan(cx, cy - 36, 1.6);
 
-  drawRect(cx - 32, cy - 2, 64, 4, '#333');
+  drawRect(cx - 34, cy - 2, 68, 4, '#333');
 
-  drawRect(cx - 26, cy + 4, 52, 56, '#001a08');
-  drawRect(cx - 24, cy + 6, 48, 52, '#002a10');
-  drawGreenMan(cx, cy + 30, 1.55);
+  // Green lens
+  drawRect(cx - 28, cy + 4, 56, 58, '#001a08');
+  drawRect(cx - 26, cy + 6, 52, 54, '#002a10');
+  drawGreenMan(cx, cy + 32, 1.6);
 
-  drawRect(cx - 32, cy - 66, 64, 2, '#444');
-  drawRect(cx - 32, cy - 4, 64, 2, '#444');
-  drawRect(cx - 32, cy + 58, 64, 2, '#444');
+  drawRect(cx - 34, cy - 68, 68, 2, '#444');
+  drawRect(cx - 34, cy - 4, 68, 2, '#444');
+  drawRect(cx - 34, cy + 60, 68, 2, '#444');
 }
 
 function draw() {
@@ -590,8 +605,8 @@ function draw() {
 
   if (charging && manColor === 'green') {
     const barW = 28;
-    drawRect(player.x - barW/2, player.y - 32, barW, 4, '#111');
-    drawRect(player.x - barW/2, player.y - 32, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
+    drawRect(player.x - barW/2, player.y - 34, barW, 4, '#111');
+    drawRect(player.x - barW/2, player.y - 34, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
   }
 
   if (state === 'menu') {
