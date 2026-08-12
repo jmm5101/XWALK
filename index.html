@@ -139,10 +139,11 @@
 
 <script>
 // ============================================================
-// XWALK v7 — lane paint matches vertical traffic flow
+// XWALK v8 — two-way traffic: left lanes down, right lanes up
+// Cars drive BETWEEN lane lines (not along them)
 // ============================================================
 
-const XWALK_VERSION = '2026-08-12-v7';
+const XWALK_VERSION = '2026-08-12-v8';
 
 (function forceLatestVersion() {
   try {
@@ -189,6 +190,7 @@ const STRIPE_W = 14;
 const MAX_BLOCKS = 3.5;
 const ZEBRA_LEFT = 42;
 const ZEBRA_RIGHT = 318;
+const ROAD_MID = (ZEBRA_LEFT + ZEBRA_RIGHT) / 2;  // ~180
 
 let state = 'menu';
 let manColor = 'green';
@@ -214,6 +216,7 @@ function isWhiteStripe(px) {
 }
 
 function getBlackGapCenters() {
+  // Centers of black gaps = car driving paths (between lane lines)
   const centers = [];
   let x = ZEBRA_LEFT + STRIPE_W;
   while (x + STRIPE_W / 2 < ZEBRA_RIGHT) {
@@ -221,6 +224,23 @@ function getBlackGapCenters() {
     x += STRIPE_W * 2;
   }
   return centers;
+}
+
+function getLaneDividerXs() {
+  // Lane lines sit on the edges of white stripes (between the black driving lanes)
+  const xs = [];
+  let x = ZEBRA_LEFT;
+  let light = true;
+  while (x < ZEBRA_RIGHT) {
+    if (light) {
+      // left and right edge of each white stripe act as dividers
+      xs.push(x + 1);
+      xs.push(x + STRIPE_W - 2);
+    }
+    x += STRIPE_W;
+    light = !light;
+  }
+  return xs;
 }
 
 function resetGame(color) {
@@ -349,16 +369,22 @@ function triggerCarHit(px) {
 function spawnCar() {
   const gaps = getBlackGapCenters();
   if (gaps.length === 0) return;
-  const laneX = gaps[Math.floor(Math.random() * gaps.length)] - 9;
-  const fromTop = Math.random() < 0.5;
+
+  const gapCenter = gaps[Math.floor(Math.random() * gaps.length)];
+  const laneX = gapCenter - 9;  // car width 18, centered in black gap
+
+  // Left side of road → traffic goes DOWN (positive vy, spawn from top)
+  // Right side of road → traffic goes UP (negative vy, spawn from bottom)
+  const isLeft = gapCenter < ROAD_MID;
+  const speed = 0.9 + Math.random() * 0.8;
 
   cars.push({
     x: laneX,
-    y: fromTop ? 55 : 195,
+    y: isLeft ? 55 : 195,
     w: 18,
     h: 28,
     vx: 0,
-    vy: fromTop ? (0.9 + Math.random() * 0.8) : -(0.9 + Math.random() * 0.8),
+    vy: isLeft ? speed : -speed,
     color: Math.random() < 0.28 ? PAL.red : (Math.random() < 0.5 ? PAL.blue : PAL.orange)
   });
 }
@@ -554,16 +580,14 @@ function drawZebra() {
 }
 
 function drawLaneMarkings() {
-  // Vertical dashed centerlines in each black gap — matches north-south traffic flow
-  const gaps = getBlackGapCenters();
-  for (const gx of gaps) {
-    // Above the crosswalk
+  // Vertical dashed lane DIVIDERS (cars drive BETWEEN these lines)
+  const dividers = getLaneDividerXs();
+  for (const lx of dividers) {
     for (let y = 78; y < ZEBRA.y - 4; y += 12) {
-      drawRect(gx - 1, y, 2, 7, '#555');
+      drawRect(lx, y, 2, 7, '#555');
     }
-    // Below the crosswalk
     for (let y = ZEBRA.y + ZEBRA.h + 4; y < 195; y += 12) {
-      drawRect(gx - 1, y, 2, 7, '#555');
+      drawRect(lx, y, 2, 7, '#555');
     }
   }
 }
@@ -606,7 +630,6 @@ function draw() {
   drawRect(318, 70, 42, 130, PAL.curb);
   drawRect(318, 70, 3, 130, PAL.light);
 
-  // Lane paint runs vertically with traffic (through black gaps)
   drawLaneMarkings();
 
   drawZebra();
