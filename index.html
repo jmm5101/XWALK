@@ -69,7 +69,6 @@
   .btn:active { transform: scale(0.96); }
   .btn.red { border-color: #c00; color: #f66; }
   .btn.green { border-color: #0a0; color: #6f6; }
-  #timer { color: #ffcc00; font-size: 14px; }
   #msg { min-height: 26px; margin: 4px 0; font-size: 11px; }
 
   #touch-controls {
@@ -125,9 +124,7 @@
       <button class="btn red" id="btn-red">RED MAN</button>
       <button class="btn green" id="btn-green">GREEN MAN</button>
     </div>
-    <div id="hud" style="display:none">
-      <!-- timer now drawn on canvas as ped-head countdown -->
-    </div>
+    <div id="hud" style="display:none"></div>
   </div>
 
   <div id="touch-controls">
@@ -139,10 +136,12 @@
 
 <script>
 // ============================================================
-// XWALK v9 — authentic Ampelmännchen + ped-head countdown
+// XWALK v10 — Ampelmännchen redrawn from classic signal photos
+// Red = stocky front-facing T / barricade
+// Green = walking arrow silhouette with hat
 // ============================================================
 
-const XWALK_VERSION = '2026-08-12-v9';
+const XWALK_VERSION = '2026-08-12-v10';
 
 (function forceLatestVersion() {
   try {
@@ -467,7 +466,7 @@ function update(dt) {
       continue;
     }
     if (manColor === 'green' && state === 'play') {
-      const pbox = { x: player.x - 8, y: player.y - 20, w: 16, h: 24 };
+      const pbox = { x: player.x - 9, y: player.y - 22, w: 18, h: 26 };
       if (rectsOverlap(pbox, c)) {
         state = 'dead';
         document.getElementById('msg').textContent = 'HIT BY CAR — RUN OVER!';
@@ -492,8 +491,9 @@ function drawRect(x, y, w, h, color) {
 }
 
 // ============================================================
-// Authentic Ampelmännchen (Karl Peglau style)
-// Stocky body, flat hat, outstretched arms (red), walking stride (green)
+// Ampelmännchen from classic photos
+// Red: front, wide hat, arms horizontal (T / barricade), plump
+// Green: side walk, same hat, legs form arrow / X stride
 // ============================================================
 
 function drawRedMan(x, y, scale) {
@@ -501,27 +501,27 @@ function drawRedMan(x, y, scale) {
   const c = PAL.red;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Flat-top hat with wide brim (signature)
-  p(-8, -22, 16, 3);       // brim
-  p(-6, -28, 12, 7);       // crown
+  // Hat — flat crown + wide brim (the iconic detail)
+  p(-7, -26, 14, 5);       // crown
+  p(-10, -22, 20, 3);      // brim sticks out both sides
 
-  // Round head / button nose silhouette
-  p(-5, -21, 10, 7);
+  // Head under brim
+  p(-5, -20, 10, 5);
 
-  // Stocky body (corpulent silhouette)
-  p(-6, -14, 12, 12);
-  p(-7, -4, 14, 5);
+  // Plump body
+  p(-6, -15, 12, 11);
+  p(-7, -5, 14, 4);        // slight belly / base of torso
 
-  // Arms fully outstretched (barricade pose) + rounded hands
-  p(-14, -11, 8, 4);
-  p(-16, -12, 4, 6);
-  p(6, -11, 8, 4);
-  p(12, -12, 4, 6);
+  // Arms straight out — classic stop barricade + round hands
+  p(-15, -12, 9, 4);
+  p(-17, -13, 4, 6);       // left hand
+  p(6, -12, 9, 4);
+  p(13, -13, 4, 6);        // right hand
 
-  // Short legs + feet
-  p(-4, 1, 3, 7);
-  p(1, 1, 3, 7);
-  p(-5, 7, 10, 3);
+  // Short parallel legs + feet
+  p(-4, -1, 3, 7);
+  p(1, -1, 3, 7);
+  p(-5, 5, 10, 3);
 }
 
 function drawGreenMan(x, y, scale) {
@@ -529,32 +529,33 @@ function drawGreenMan(x, y, scale) {
   const c = PAL.green;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Same hat, slightly tilted feel
-  p(-7, -24, 15, 3);
-  p(-5, -30, 12, 7);
+  // Hat (same style)
+  p(-5, -28, 13, 5);
+  p(-8, -24, 18, 3);
 
-  // Head in profile
-  p(-4, -23, 9, 7);
+  // Head
+  p(-4, -22, 9, 5);
 
-  // Stocky body mid-stride
-  p(-5, -16, 11, 11);
+  // Body leaning into the walk
+  p(-4, -17, 10, 10);
 
-  // Front arm forward, back arm back
-  p(5, -13, 8, 4);
-  p(11, -14, 4, 5);
-  p(-10, -12, 6, 4);
-  p(-12, -13, 3, 5);
+  // Front arm thrust forward
+  p(5, -14, 8, 4);
+  p(11, -15, 4, 5);
 
-  // Clear walking legs (arrow-like stride)
-  p(-5, -5, 4, 8);
-  p(-6, 2, 4, 3);
-  p(2, -3, 5, 10);
-  p(5, 6, 4, 3);
+  // Back arm
+  p(-9, -13, 6, 4);
+
+  // Legs in wide mid-stride (forms the "arrow")
+  p(-5, -7, 4, 8);         // trailing leg
+  p(-6, 0, 4, 3);          // trailing foot
+  p(2, -5, 5, 10);         // leading leg
+  p(5, 4, 4, 3);           // leading foot
 }
 
 function drawMan(x, y, color, isRed) {
-  if (isRed) drawRedMan(x, y, 1.15);
-  else drawGreenMan(x, y, 1.15);
+  if (isRed) drawRedMan(x, y, 1.2);
+  else drawGreenMan(x, y, 1.2);
 }
 
 function drawCar(c) {
@@ -593,9 +594,7 @@ function drawLaneMarkings() {
   }
 }
 
-// 7-segment style digit for ped countdown head
 function drawDigit(cx, cy, digit, color) {
-  // 7-segment layout (A top, B-C right, D bottom, E-F left, G middle)
   const segs = {
     0: [1,1,1,1,1,1,0],
     1: [0,1,1,0,0,0,0],
@@ -609,37 +608,24 @@ function drawDigit(cx, cy, digit, color) {
     9: [1,1,1,1,0,1,1],
   };
   const s = segs[digit] || segs[0];
-  const t = 2; // thickness
-  const w = 10, h = 8;
-  // A top
+  const t = 2, w = 10, h = 8;
   if (s[0]) drawRect(cx - w/2, cy - h - t, w, t, color);
-  // B top-right
   if (s[1]) drawRect(cx + w/2 - t, cy - h, t, h, color);
-  // C bottom-right
   if (s[2]) drawRect(cx + w/2 - t, cy, t, h, color);
-  // D bottom
   if (s[3]) drawRect(cx - w/2, cy + h, w, t, color);
-  // E bottom-left
   if (s[4]) drawRect(cx - w/2, cy, t, h, color);
-  // F top-left
   if (s[5]) drawRect(cx - w/2, cy - h, t, h, color);
-  // G middle
   if (s[6]) drawRect(cx - w/2, cy - t/2, w, t, color);
 }
 
 function drawCountdownHead(cx, cy, seconds) {
-  // Pedestrian signal housing with large countdown digits only (no hand)
   const sec = Math.max(0, Math.ceil(seconds));
   const color = sec <= 5 ? PAL.red : PAL.yellow;
 
-  // Housing
   drawRect(cx - 28, cy - 22, 56, 44, '#222');
   drawRect(cx - 24, cy - 18, 48, 36, '#0a0a0a');
-
-  // Lens
   drawRect(cx - 20, cy - 14, 40, 28, '#1a1a00');
 
-  // Digits (no leading zero)
   if (sec >= 10) {
     drawDigit(cx - 10, cy, Math.floor(sec / 10), color);
     drawDigit(cx + 10, cy, sec % 10, color);
@@ -647,30 +633,29 @@ function drawCountdownHead(cx, cy, seconds) {
     drawDigit(cx, cy, sec, color);
   }
 
-  // Rim
   drawRect(cx - 24, cy - 18, 48, 2, '#444');
   drawRect(cx - 24, cy + 16, 48, 2, '#444');
 }
 
 function drawPedSignal(cx, cy) {
-  drawRect(cx - 36, cy - 68, 72, 140, '#222');
-  drawRect(cx - 32, cy - 64, 64, 132, '#0a0a0a');
+  drawRect(cx - 38, cy - 70, 76, 144, '#222');
+  drawRect(cx - 34, cy - 66, 68, 136, '#0a0a0a');
 
-  // Red lens — figure fills most of the lens like a real signal
-  drawRect(cx - 26, cy - 58, 52, 52, '#1a0000');
-  drawRect(cx - 24, cy - 56, 48, 48, '#2a0000');
-  drawRedMan(cx, cy - 28, 1.0);
+  // Red lens
+  drawRect(cx - 28, cy - 60, 56, 54, '#1a0000');
+  drawRect(cx - 26, cy - 58, 52, 50, '#2a0000');
+  drawRedMan(cx, cy - 30, 1.05);
 
-  drawRect(cx - 32, cy - 2, 64, 4, '#333');
+  drawRect(cx - 34, cy - 2, 68, 4, '#333');
 
   // Green lens
-  drawRect(cx - 26, cy + 4, 52, 52, '#001a08');
-  drawRect(cx - 24, cy + 6, 48, 48, '#002a10');
-  drawGreenMan(cx, cy + 32, 1.0);
+  drawRect(cx - 28, cy + 4, 56, 54, '#001a08');
+  drawRect(cx - 26, cy + 6, 52, 50, '#002a10');
+  drawGreenMan(cx, cy + 34, 1.05);
 
-  drawRect(cx - 32, cy - 64, 64, 2, '#444');
-  drawRect(cx - 32, cy - 4, 64, 2, '#444');
-  drawRect(cx - 32, cy + 56, 64, 2, '#444');
+  drawRect(cx - 34, cy - 66, 68, 2, '#444');
+  drawRect(cx - 34, cy - 4, 68, 2, '#444');
+  drawRect(cx - 34, cy + 58, 68, 2, '#444');
 }
 
 function draw() {
@@ -703,11 +688,10 @@ function draw() {
 
   if (charging && manColor === 'green') {
     const barW = 28;
-    drawRect(player.x - barW/2, player.y - 32, barW, 4, '#111');
-    drawRect(player.x - barW/2, player.y - 32, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
+    drawRect(player.x - barW/2, player.y - 34, barW, 4, '#111');
+    drawRect(player.x - barW/2, player.y - 34, barW * charge, 4, charge > 0.7 ? PAL.yellow : PAL.green);
   }
 
-  // Ped-head countdown during play
   if (state === 'play') {
     drawCountdownHead(W - 40, 28, timer);
   }
@@ -715,7 +699,7 @@ function draw() {
   if (state === 'menu') {
     ctx.fillStyle = 'rgba(0,0,0,0.78)';
     ctx.fillRect(0, 0, W, H);
-    drawPedSignal(W / 2, 64);
+    drawPedSignal(W / 2, 62);
 
     ctx.fillStyle = PAL.yellow;
     ctx.font = '16px "Press Start 2P"';
