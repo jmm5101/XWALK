@@ -139,10 +139,10 @@
 
 <script>
 // ============================================================
-// XWALK v6 — sprites centered in signal-head frames
+// XWALK v7 — lane paint matches vertical traffic flow
 // ============================================================
 
-const XWALK_VERSION = '2026-08-12-v6';
+const XWALK_VERSION = '2026-08-12-v7';
 
 (function forceLatestVersion() {
   try {
@@ -479,26 +479,21 @@ function drawRedMan(x, y, scale) {
   const c = PAL.red;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Hat
   p(-12, -36, 24, 3);
   p(-9, -42, 18, 7);
   p(-10, -37, 3, 3);
   p(7, -37, 3, 3);
 
-  // Head
   p(-7, -34, 14, 8);
 
-  // Body
   p(-8, -26, 16, 16);
   p(-10, -12, 20, 6);
 
-  // Arms out
   p(-18, -20, 10, 5);
   p(-21, -19, 5, 5);
   p(8, -20, 10, 5);
   p(16, -19, 5, 5);
 
-  // Legs
   p(-6, -6, 5, 10);
   p(1, -6, 5, 10);
   p(-8, 3, 16, 4);
@@ -509,25 +504,20 @@ function drawGreenMan(x, y, scale) {
   const c = PAL.green;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Hat
   p(-11, -38, 22, 3);
   p(-8, -44, 17, 7);
   p(-9, -39, 3, 3);
   p(6, -39, 3, 3);
 
-  // Head
   p(-6, -35, 13, 8);
 
-  // Body
   p(-7, -27, 14, 14);
 
-  // Arms
   p(6, -22, 10, 5);
   p(14, -21, 5, 5);
   p(-13, -21, 8, 5);
   p(-15, -20, 4, 4);
 
-  // Legs
   p(-7, -12, 6, 10);
   p(-8, -3, 5, 4);
   p(2, -10, 7, 12);
@@ -563,22 +553,33 @@ function drawZebra() {
   drawRect(ZEBRA_LEFT, y + h - 1, ZEBRA_RIGHT - ZEBRA_LEFT, 1, '#b0a890');
 }
 
+function drawLaneMarkings() {
+  // Vertical dashed centerlines in each black gap — matches north-south traffic flow
+  const gaps = getBlackGapCenters();
+  for (const gx of gaps) {
+    // Above the crosswalk
+    for (let y = 78; y < ZEBRA.y - 4; y += 12) {
+      drawRect(gx - 1, y, 2, 7, '#555');
+    }
+    // Below the crosswalk
+    for (let y = ZEBRA.y + ZEBRA.h + 4; y < 195; y += 12) {
+      drawRect(gx - 1, y, 2, 7, '#555');
+    }
+  }
+}
+
 function drawPedSignal(cx, cy) {
   drawRect(cx - 36, cy - 68, 72, 140, '#222');
   drawRect(cx - 32, cy - 64, 64, 132, '#0a0a0a');
 
-  // Red lens (center at cy - 32)
   drawRect(cx - 26, cy - 58, 52, 52, '#1a0000');
   drawRect(cx - 24, cy - 56, 48, 48, '#2a0000');
-  // Figure visual center is ~10px above draw point → shift draw Y down to center
   drawRedMan(cx, cy - 22, 1.15);
 
   drawRect(cx - 32, cy - 2, 64, 4, '#333');
 
-  // Green lens (center at cy + 30)
   drawRect(cx - 26, cy + 4, 52, 52, '#001a08');
   drawRect(cx - 24, cy + 6, 48, 48, '#002a10');
-  // Figure visual center is ~11px above draw point → shift draw Y down to center
   drawGreenMan(cx, cy + 41, 1.15);
 
   drawRect(cx - 32, cy - 64, 64, 2, '#444');
@@ -605,10 +606,8 @@ function draw() {
   drawRect(318, 70, 42, 130, PAL.curb);
   drawRect(318, 70, 3, 130, PAL.light);
 
-  for (let lx = 50; lx < 310; lx += 28) {
-    drawRect(lx, 100, 14, 2, '#333');
-    drawRect(lx, 175, 14, 2, '#333');
-  }
+  // Lane paint runs vertically with traffic (through black gaps)
+  drawLaneMarkings();
 
   drawZebra();
   cars.forEach(drawCar);
