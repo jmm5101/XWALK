@@ -139,10 +139,10 @@
 
 <script>
 // ============================================================
-// XWALK v5 — half-size pixels, finer Ampelmännchen that fit frames
+// XWALK v6 — sprites centered in signal-head frames
 // ============================================================
 
-const XWALK_VERSION = '2026-08-12-v5';
+const XWALK_VERSION = '2026-08-12-v6';
 
 (function forceLatestVersion() {
   try {
@@ -474,37 +474,31 @@ function drawRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.max(1, Math.floor(w)), Math.max(1, Math.floor(h)));
 }
 
-// ============================================================
-// Ampelmännchen with HALF-SIZE pixels (finer resolution)
-// Coordinates are in 0.5-unit steps; overall figure fits the lenses
-// ============================================================
-
 function drawRedMan(x, y, scale) {
-  // scale is overall figure scale; internal pixels are half-size
-  const s = (scale || 1) * 0.5;   // half pixel size
+  const s = (scale || 1) * 0.5;
   const c = PAL.red;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Classic wide hat
-  p(-12, -36, 24, 3);     // brim
-  p(-9, -42, 18, 7);      // crown
+  // Hat
+  p(-12, -36, 24, 3);
+  p(-9, -42, 18, 7);
   p(-10, -37, 3, 3);
   p(7, -37, 3, 3);
 
   // Head
   p(-7, -34, 14, 8);
 
-  // Body / coat
+  // Body
   p(-8, -26, 16, 16);
   p(-10, -12, 20, 6);
 
-  // Arms fully out + hands (classic stop)
+  // Arms out
   p(-18, -20, 10, 5);
   p(-21, -19, 5, 5);
   p(8, -20, 10, 5);
   p(16, -19, 5, 5);
 
-  // Legs + base
+  // Legs
   p(-6, -6, 5, 10);
   p(1, -6, 5, 10);
   p(-8, 3, 16, 4);
@@ -515,7 +509,7 @@ function drawGreenMan(x, y, scale) {
   const c = PAL.green;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Same hat
+  // Hat
   p(-11, -38, 22, 3);
   p(-8, -44, 17, 7);
   p(-9, -39, 3, 3);
@@ -527,21 +521,20 @@ function drawGreenMan(x, y, scale) {
   // Body
   p(-7, -27, 14, 14);
 
-  // Walking arms
-  p(6, -22, 10, 5);       // front arm
+  // Arms
+  p(6, -22, 10, 5);
   p(14, -21, 5, 5);
-  p(-13, -21, 8, 5);      // back arm
+  p(-13, -21, 8, 5);
   p(-15, -20, 4, 4);
 
-  // Clear walking stride
-  p(-7, -12, 6, 10);      // back leg
-  p(-8, -3, 5, 4);        // back foot
-  p(2, -10, 7, 12);       // front leg
-  p(6, 1, 5, 4);          // front foot
+  // Legs
+  p(-7, -12, 6, 10);
+  p(-8, -3, 5, 4);
+  p(2, -10, 7, 12);
+  p(6, 1, 5, 4);
 }
 
 function drawMan(x, y, color, isRed) {
-  // In-game figures use scale 1 (with internal half-pixels)
   if (isRed) drawRedMan(x, y, 1);
   else drawGreenMan(x, y, 1);
 }
@@ -571,24 +564,23 @@ function drawZebra() {
 }
 
 function drawPedSignal(cx, cy) {
-  // Larger housing / lenses so the finer figures sit cleanly inside
   drawRect(cx - 36, cy - 68, 72, 140, '#222');
   drawRect(cx - 32, cy - 64, 64, 132, '#0a0a0a');
 
-  // Red lens
+  // Red lens (center at cy - 32)
   drawRect(cx - 26, cy - 58, 52, 52, '#1a0000');
   drawRect(cx - 24, cy - 56, 48, 48, '#2a0000');
-  drawRedMan(cx, cy - 32, 1.15);   // scale keeps figure inside lens
+  // Figure visual center is ~10px above draw point → shift draw Y down to center
+  drawRedMan(cx, cy - 22, 1.15);
 
-  // Divider
   drawRect(cx - 32, cy - 2, 64, 4, '#333');
 
-  // Green lens
+  // Green lens (center at cy + 30)
   drawRect(cx - 26, cy + 4, 52, 52, '#001a08');
   drawRect(cx - 24, cy + 6, 48, 48, '#002a10');
-  drawGreenMan(cx, cy + 30, 1.15);
+  // Figure visual center is ~11px above draw point → shift draw Y down to center
+  drawGreenMan(cx, cy + 41, 1.15);
 
-  // Rims
   drawRect(cx - 32, cy - 64, 64, 2, '#444');
   drawRect(cx - 32, cy - 4, 64, 2, '#444');
   drawRect(cx - 32, cy + 56, 64, 2, '#444');
