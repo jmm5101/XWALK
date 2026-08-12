@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>XWALK — Red & Green Man</title>
+<!-- Force browsers to always revalidate / not keep stale copies -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -136,8 +140,32 @@
 
 <script>
 // ============================================================
-// XWALK — Compact Ampelmännchen that fit inside signal frames
+// XWALK — versioned hard-refresh so old cached copies are dropped
 // ============================================================
+
+// Bump this string every time you ship a visual/gameplay change
+const XWALK_VERSION = '2026-08-12-v3';
+
+(function forceLatestVersion() {
+  try {
+    const key = 'xwalk_version';
+    const stored = localStorage.getItem(key);
+    if (stored !== XWALK_VERSION) {
+      localStorage.setItem(key, XWALK_VERSION);
+      // Only reload if we already had an older version stored
+      // (avoids an infinite loop on first visit)
+      if (stored !== null) {
+        // Cache-bust the URL and force a full reload
+        const url = new URL(window.location.href);
+        url.searchParams.set('v', XWALK_VERSION);
+        window.location.replace(url.toString());
+        return;
+      }
+    }
+  } catch (e) {
+    // localStorage blocked — ignore
+  }
+})();
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -453,36 +481,26 @@ function drawRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
-// ============================================================
-// COMPACT AMPELMÄNNCHEN — designed to fit inside signal lenses
-// Bounding box roughly 22 wide × 28 tall so scale 1.4 stays inside
-// ============================================================
-
 function drawRedMan(x, y, scale) {
   const s = scale || 1;
   const c = PAL.red;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Hat (compact wide brim + flat crown)
   p(-7, -20, 14, 2);
   p(-5, -23, 10, 4);
   p(-6, -21, 2, 2);
   p(4, -21, 2, 2);
 
-  // Head
   p(-4, -18, 8, 5);
 
-  // Body (slightly wider at bottom)
   p(-5, -13, 10, 10);
   p(-6, -4, 12, 4);
 
-  // Arms out but kept inside frame
   p(-11, -10, 6, 3);
   p(-13, -9, 3, 3);
   p(5, -10, 6, 3);
   p(10, -9, 3, 3);
 
-  // Legs + base
   p(-3, 0, 3, 6);
   p(1, 0, 3, 6);
   p(-4, 5, 9, 2);
@@ -493,24 +511,19 @@ function drawGreenMan(x, y, scale) {
   const c = PAL.green;
   const p = (ox, oy, w, h) => drawRect(x + ox * s, y + oy * s, w * s, h * s, c);
 
-  // Hat
   p(-6, -21, 13, 2);
   p(-4, -24, 10, 4);
   p(-5, -22, 2, 2);
   p(4, -22, 2, 2);
 
-  // Head
   p(-3, -19, 8, 5);
 
-  // Body
   p(-4, -14, 9, 9);
 
-  // Walking arms (compact)
   p(4, -11, 6, 3);
   p(8, -10, 3, 3);
   p(-8, -10, 5, 3);
 
-  // Walking stride (compact)
   p(-4, -3, 4, 6);
   p(-5, 2, 3, 2);
   p(2, -1, 4, 7);
@@ -547,24 +560,19 @@ function drawZebra() {
 }
 
 function drawPedSignal(cx, cy) {
-  // Housing
   drawRect(cx - 34, cy - 66, 68, 136, '#222');
   drawRect(cx - 30, cy - 62, 60, 128, '#0a0a0a');
 
-  // Red lens — figure scaled to sit inside with margin
   drawRect(cx - 24, cy - 56, 48, 50, '#1a0000');
   drawRect(cx - 22, cy - 54, 44, 46, '#2a0000');
   drawRedMan(cx, cy - 32, 1.35);
 
-  // Divider
   drawRect(cx - 30, cy - 2, 60, 4, '#333');
 
-  // Green lens
   drawRect(cx - 24, cy + 4, 48, 50, '#001a08');
   drawRect(cx - 22, cy + 6, 44, 46, '#002a10');
   drawGreenMan(cx, cy + 28, 1.35);
 
-  // Rims
   drawRect(cx - 30, cy - 62, 60, 2, '#444');
   drawRect(cx - 30, cy - 4, 60, 2, '#444');
   drawRect(cx - 30, cy + 54, 60, 2, '#444');
